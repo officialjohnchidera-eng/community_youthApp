@@ -75,7 +75,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     axios
-      .get("http://127.0.0.1:8000/api/organization/media/public/")
+      .get(`${import.meta.env.VITE_API_URL}/organization/media/public/`)
       .then((res) => {
         setPublicMedia(res.data);
       })
