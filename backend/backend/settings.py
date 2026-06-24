@@ -91,8 +91,8 @@ TEMPLATES = [
 WSGI_APPLICATION = 'backend.wsgi.application'
 
 # DATABASE: use Railway's DATABASE_URL if present, otherwise fall back to local .env values
+# DATABASE: use Railway's DATABASE_URL if present, otherwise fall back to local .env values
 DATABASE_URL = os.getenv('DATABASE_URL')
-print(f"DEBUG: DATABASE_URL value is: {DATABASE_URL}")  # TEMPORARY DEBUG LINE
 if DATABASE_URL:
     DATABASES = {
         'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
@@ -142,8 +142,16 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
 # CSRF
+# CSRF
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False') == 'True'
+CSRF_TRUSTED_ORIGINS = [
+    'https://communityyouthapp-production.up.railway.app',
+    'https://umuaguyouthapp.vercel.app',
+]
+
+
+
 
 # Session
 SESSION_COOKIE_HTTPONLY = True
