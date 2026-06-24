@@ -108,16 +108,15 @@ Umuagu General Youth Association
 
 
 # Auto close expired requests
-from django.utils import timezone
-expired = PaymentRequest.objects.filter(
-    status='active',
-    deadline__lt=timezone.now()
-)
-expired.update(status='closed')
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_payment_requests(request):
+    # Auto close expired requests (moved inside the view, runs per-request not at import time)
+    from django.utils import timezone
+    PaymentRequest.objects.filter(
+        status='active',
+        deadline__lt=timezone.now()
+    ).update(status='closed')    
     if request.user.account_status != 'approved':
         return Response(
             {'error': 'Your account is not approved yet.'},
