@@ -199,8 +199,9 @@ DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 # CORS — REMOVED the hardcoded override at the bottom that was forcing wildcard
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(',')
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
-CORS_ALLOW_CREDENTIALS = True
-
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
+]
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 
 CACHES = {
