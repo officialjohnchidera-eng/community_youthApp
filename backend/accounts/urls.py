@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from . import views
+from .views import change_password
 
 urlpatterns = [
     # Auth endpoints
@@ -25,4 +26,5 @@ urlpatterns = [
     path('me/', views.get_me, name='get_me'),
     path('forgot-password/', views.forgot_password, name='forgot_password'),
     path('reset-password/', views.reset_password, name='reset_password'),
+    path('change-password/', change_password, name='change_password'),
 ]

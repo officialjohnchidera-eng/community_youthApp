@@ -13,16 +13,30 @@ from .serializers import (
     VillageSerializer,
     PositionSerializer
 )
-from django.core.mail import send_mail
 from django.conf import settings
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+
+
+def send_via_sendgrid(to_email, subject, message_body):
+    try:
+        message = Mail(
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to_emails=to_email,
+            subject=subject,
+            plain_text_content=message_body
+        )
+        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+        response = sg.send(message)
+        print(f"SendGrid response: {response.status_code}")
+        return True
+    except Exception as e:
+        print(f"SendGrid email error: {e}")
+        return False
 
 
 def send_registration_email(user):
-    try:
-        send_mail(
-            subject='Registration Received — Umuagu Youth Association',
-            message=f'''
-Dear {user.first_name},
+    message_body = f'''Dear {user.first_name},
 
 Your registration has been received successfully!
 
@@ -32,21 +46,16 @@ Your account is currently pending approval from the President or Vice President.
 You will be notified once your account has been reviewed.
 
 Thank you for joining Umuagu Youth Association.
-            ''',
-            from_email=settings.EMAIL_HOST_USER,
-            recipient_list=[user.email],
-            fail_silently=False
-        )
-    except Exception as e:
-        print(f"Email error: {e}")
+'''
+    send_via_sendgrid(
+        to_email=user.email,
+        subject='Registration Received — Umuagu Youth Association',
+        message_body=message_body
+    )
 
 
 def send_approval_email(user):
-    try:
-        send_mail(
-            subject='Account Approved — Umuagu Youth',
-            message=f'''
-Dear {user.first_name},
+    message_body = f'''Dear {user.first_name},
 
 Congratulations! Your account has been approved by the President.
 
@@ -55,21 +64,16 @@ Your User ID is: {user.user_id}
 You can now log in to the Umuagu Youth platform and access all features.
 
 Welcome to the organization!
-            ''',
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=True
-        )
-    except Exception:
-        pass
+'''
+    send_via_sendgrid(
+        to_email=user.email,
+        subject='Account Approved — Umuagu Youth',
+        message_body=message_body
+    )
 
 
 def send_rejection_email(user, reason):
-    try:
-        send_mail(
-            subject='Account Update — Umuagu Youth',
-            message=f'''
-Dear {user.first_name},
+    message_body = f'''Dear {user.first_name},
 
 Your registration has been reviewed and unfortunately was not approved at this time.
 
@@ -78,13 +82,12 @@ Reason: {reason}
 You can update your information and resubmit your registration for review.
 
 If you have any questions please contact the organization directly.
-            ''',
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=True
-        )
-    except Exception:
-        pass
+'''
+    send_via_sendgrid(
+        to_email=user.email,
+        subject='Account Update — Umuagu Youth',
+        message_body=message_body
+    )
 
 
 @api_view(['GET'])
@@ -197,7 +200,6 @@ def approve_reject_account(request, user_id):
 
         if decision == 'approved':
             send_approval_email(member)
-            # Send in-app notification
             try:
                 from notifications.views import create_notification
                 create_notification(
@@ -312,6 +314,7 @@ def get_me(request):
         'profile_picture': user.profile_picture.url if user.profile_picture else None,
     })
 
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def forgot_password(request):
@@ -322,21 +325,16 @@ def forgot_password(request):
     try:
         user = CustomUser.objects.get(email=email)
     except CustomUser.DoesNotExist:
-        # Return success even if email not found for security
         return Response({'message': 'If this email exists you will receive a reset link.'})
     
     import uuid
     from django.core.cache import cache
     token = str(uuid.uuid4())
-    cache.set(f'password_reset_{token}', user.id, timeout=3600)  # 1 hour
+    cache.set(f'password_reset_{token}', user.id, timeout=3600)
 
     reset_link = f'{settings.FRONTEND_URL}/reset-password?token={token}'
 
-    try:
-        send_mail(
-            subject='Password Reset — Umuagu Youth Association',
-            message=f'''
-Dear {user.first_name},
+    message_body = f'''Dear {user.first_name},
 
 You requested a password reset for your account.
 
@@ -348,13 +346,14 @@ This link expires in 1 hour.
 If you did not request this, please ignore this email.
 
 Umuagu General Youth Association
-            ''',
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False
-        )
-    except Exception as e:
-        print(f"Email error: {e}")
+'''
+    sent = send_via_sendgrid(
+        to_email=user.email,
+        subject='Password Reset — Umuagu Youth Association',
+        message_body=message_body
+    )
+
+    if not sent:
         return Response({'error': 'Failed to send email. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({'message': 'Password reset link sent to your email.'})
@@ -390,3 +389,24 @@ def reset_password(request):
         return Response({'message': 'Password reset successful! You can now log in.'})
     except CustomUser.DoesNotExist:
         return Response({'error': 'User not found.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    user = request.user
+    old_password = request.data.get('old_password')
+    new_password = request.data.get('new_password')
+
+    if not old_password or not new_password:
+        return Response({'error': 'Both fields are required.'}, status=400)
+
+    if not user.check_password(old_password):
+        return Response({'error': 'Current password is incorrect.'}, status=400)
+
+    if len(new_password) < 8:
+        return Response({'error': 'Password must be at least 8 characters.'}, status=400)
+
+    user.set_password(new_password)
+    user.save()
+    return Response({'message': 'Password changed successfully.'})
