@@ -26,6 +26,7 @@ const getNavItems = (user) => {
     { path: '/dashboard/media', icon: <FaPhotoVideo />, label: 'Media Gallery' },
     { path: '/dashboard/welfare', icon: <FaHeart />, label: 'Welfare' },
     { path: '/dashboard/members', icon: <FaUsers />, label: 'Members' },
+    { path: '/dashboard/profile', icon: <FaUser />, label: 'My Profile' }
   ]
 
   const executiveItems = [
