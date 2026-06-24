@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 
+import ProfilePage from './pages/dashboard/ProfilePage'
+
 // Public Pages
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/auth/LoginPage'
@@ -99,6 +101,7 @@ export default function App() {
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       <Route path="/dashboard/payments" element={<ApprovedRoute><PaymentsPage /></ApprovedRoute>} />
       <Route path="/dashboard/meetings" element={<ApprovedRoute><MeetingsPage /></ApprovedRoute>} />
+      <Route path="/dashboard/profile" element={<ApprovedRoute><ProfilePage /></ApprovedRoute>} />
       <Route path="/dashboard/announcements" element={<ApprovedRoute><AnnouncementsPage /></ApprovedRoute>} />
       <Route path="/dashboard/polls" element={<ApprovedRoute><PollsPage /></ApprovedRoute>} />
       <Route path="/dashboard/media" element={<ApprovedRoute><MediaPage /></ApprovedRoute>} />
