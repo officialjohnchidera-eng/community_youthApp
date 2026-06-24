@@ -9,12 +9,13 @@ import {
   FaHome, FaMoneyBillWave, FaCalendarAlt, FaBullhorn,
   FaUsers, FaPhotoVideo, FaHeart, FaGavel, FaPoll,
   FaFileAlt, FaBell, FaSignOutAlt, FaBars, FaTimes,
-  FaUserCheck, FaChartBar, FaCalendar, FaMoneyBill
+  FaUserCheck, FaChartBar, FaCalendar, FaMoneyBill, FaUser
 } from 'react-icons/fa'
 
 const getNavItems = (user) => {
   if (user?.account_status !== 'approved') return [
     { path: '/dashboard', icon: <FaHome />, label: 'Dashboard' },
+    { path: '/dashboard/profile', icon: <FaUser />, label: 'My Profile' },
   ]
 
   const base = [
