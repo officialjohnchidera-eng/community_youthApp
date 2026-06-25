@@ -70,9 +70,18 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     village = VillageSerializer(read_only=True)
     position = serializers.SerializerMethodField()
+    profile_picture = serializers.SerializerMethodField()
 
     def get_position(self, obj):
         return obj.position.title if obj.position else None
+
+    def get_profile_picture(self, obj):
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
 
     class Meta:
         model = CustomUser
@@ -82,7 +91,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'position', 'profile_picture', 'account_status',
             'date_joined'
         ]
-
 
 class AccountVerificationSerializer(serializers.ModelSerializer):
     member = UserProfileSerializer(read_only=True)

@@ -124,7 +124,7 @@ def register(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_profile(request):
-    serializer = UserProfileSerializer(request.user)
+    serializer = UserProfileSerializer(request.user, context={'request': request})
     return Response(serializer.data)
 
 
@@ -134,7 +134,8 @@ def update_profile(request):
     serializer = UserProfileSerializer(
         request.user,
         data=request.data,
-        partial=True
+        partial=True,
+        context={'request': request}
     )
     if serializer.is_valid():
         serializer.save()
@@ -162,7 +163,7 @@ def get_pending_accounts(request):
             user.save()
 
     pending_users = CustomUser.objects.filter(account_status='pending')
-    serializer = UserProfileSerializer(pending_users, many=True)
+    serializer = UserProfileSerializer(pending_users, many=True, context={'request': request})
     return Response(serializer.data)
 
 
@@ -293,7 +294,7 @@ def get_members(request):
             status=status.HTTP_403_FORBIDDEN
         )
     members = CustomUser.objects.all().order_by('-date_joined')
-    serializer = UserProfileSerializer(members, many=True)
+    serializer = UserProfileSerializer(members, many=True, context={'request': request})
     return Response(serializer.data)
 
 
@@ -311,7 +312,7 @@ def get_me(request):
         'role': user.role,
         'position': user.position.title if user.position else None,
         'account_status': user.account_status,
-        'profile_picture': user.profile_picture.url if user.profile_picture else None,
+        'profile_picture': request.build_absolute_uri(user.profile_picture.url) if user.profile_picture else None,
     })
 
 
@@ -389,7 +390,7 @@ def reset_password(request):
         return Response({'message': 'Password reset successful! You can now log in.'})
     except CustomUser.DoesNotExist:
         return Response({'error': 'User not found.'}, status=status.HTTP_400_BAD_REQUEST)
-    
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
