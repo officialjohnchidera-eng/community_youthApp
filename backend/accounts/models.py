@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
 import uuid
-
+from cloudinary.models import CloudinaryField
 
 # =============================================================
 # VILLAGE MODEL
@@ -95,10 +95,13 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=100)
     phone = models.CharField(max_length=20)
     date_of_birth = models.DateField()
-    profile_picture = models.ImageField(
-        upload_to='profile_pictures/',
-        null=True,
-        blank=True
+   
+
+    profile_picture = CloudinaryField(
+    'image',
+    folder='profile_pictures',
+    null=True,
+    blank=True
     )
 
     # Organization Information

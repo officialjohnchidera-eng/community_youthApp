@@ -312,7 +312,7 @@ def get_me(request):
         'role': user.role,
         'position': user.position.title if user.position else None,
         'account_status': user.account_status,
-        'profile_picture': request.build_absolute_uri(user.profile_picture.url) if user.profile_picture else None,
+        'profile_picture': user.profile_picture.url if user.profile_picture else None,
     })
 
 
