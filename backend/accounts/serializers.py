@@ -70,12 +70,12 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     village = VillageSerializer(read_only=True)
     position = serializers.SerializerMethodField()
-    profile_picture = serializers.SerializerMethodField()
+    profile_picture_url = serializers.SerializerMethodField()
 
     def get_position(self, obj):
         return obj.position.title if obj.position else None
 
-    def get_profile_picture(self, obj):
+    def get_profile_picture_url(self, obj):
         if obj.profile_picture:
             return obj.profile_picture.url
         return None
@@ -85,10 +85,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             'user_id', 'email', 'first_name', 'last_name',
             'phone', 'date_of_birth', 'village', 'role',
-            'position', 'profile_picture', 'account_status',
+            'position', 'profile_picture', 'profile_picture_url', 'account_status',
             'date_joined'
         ]
-
+        extra_kwargs = {
+            'profile_picture': {'write_only': True}
+        }
 
 class AccountVerificationSerializer(serializers.ModelSerializer):
     member = UserProfileSerializer(read_only=True)
