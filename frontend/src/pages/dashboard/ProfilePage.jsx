@@ -122,8 +122,8 @@ export default function ProfilePage() {
 
             {/* Avatar */}
             <div className="relative flex-shrink-0">
-              {user?.profile_picture ? (
-                <img src={user.profile_picture} alt="Profile" className="w-20 h-20 rounded-full object-cover border-2 border-emerald-500" />
+              {user?.profile_picture_url ? (
+                <img src={user.profile_picture_url} alt="Profile" className="w-20 h-20 rounded-full object-cover border-2 border-emerald-500" />
               ) : (
                 <div className="w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold text-2xl border-2 border-emerald-600">
                   {initials}
