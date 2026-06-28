@@ -130,9 +130,17 @@ export default function DashboardLayout({ children }) {
       {/* User Profile */}
       <div className="p-4 border-b border-gray-800">
         <div className="bg-gray-800 rounded-xl p-3 flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-            {user?.first_name?.[0]}{user?.last_name?.[0]}
-          </div>
+          {user?.profile_picture_url ? (
+            <img
+              src={user.profile_picture_url}
+              alt="Profile"
+              className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+            />
+          ) : (
+            <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+              {user?.first_name?.[0]}{user?.last_name?.[0]}
+            </div>
+          )}
           <div className="overflow-hidden">
             <p className="text-white font-semibold text-sm truncate">{user?.first_name} {user?.last_name}</p>
             <p className="text-emerald-400 text-xs truncate">{user?.user_id}</p>
@@ -329,9 +337,17 @@ export default function DashboardLayout({ children }) {
             </div>
 
             {/* Avatar */}
-            <div className="w-9 h-9 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
-              {user?.first_name?.[0]}{user?.last_name?.[0]}
-            </div>
+            {user?.profile_picture_url ? (
+              <img
+                src={user.profile_picture_url}
+                alt="Profile"
+                className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                {user?.first_name?.[0]}{user?.last_name?.[0]}
+              </div>
+            )}
           </div>
         </header>
 

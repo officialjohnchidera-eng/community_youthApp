@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { FaUsers, FaSearch, FaUserCheck, FaUserTimes, FaClock, FaPhone, FaEnvelope, FaMapMarkerAlt } from 'react-icons/fa'
+import { motion, AnimatePresence } from 'framer-motion'
+import { FaUsers, FaSearch, FaUserCheck, FaUserTimes, FaClock, FaPhone, FaEnvelope, FaMapMarkerAlt, FaTimes } from 'react-icons/fa'
 import DashboardLayout from '../../components/DashboardLayout'
 import api from '../../api/axios'
 import { useAuth } from '../../context/AuthContext'
@@ -12,6 +12,7 @@ export default function MembersPage() {
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState('all')
   const [selectedMember, setSelectedMember] = useState(null)
+  const [enlargedImage, setEnlargedImage] = useState(null)
 
   useEffect(() => {
     fetchMembers()
@@ -42,7 +43,7 @@ export default function MembersPage() {
         m.last_name?.toLowerCase().includes(q) ||
         m.user_id?.toLowerCase().includes(q) ||
         m.village?.name?.toLowerCase().includes(q) ||
-        m.position?.title?.toLowerCase().includes(q)
+        m.position?.toLowerCase().includes(q)
       )
     })
 
@@ -54,6 +55,24 @@ export default function MembersPage() {
     if (status === 'approved') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
     if (status === 'pending') return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
     return 'bg-red-500/10 text-red-400 border-red-500/30'
+  }
+
+  const Avatar = ({ member, size = 'w-12 h-12', textSize = 'text-lg', onClick }) => {
+    if (member.profile_picture_url) {
+      return (
+        <img
+          src={member.profile_picture_url}
+          alt={`${member.first_name} ${member.last_name}`}
+          onClick={onClick}
+          className={`${size} rounded-full object-cover flex-shrink-0 ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+        />
+      )
+    }
+    return (
+      <div className={`${size} bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold ${textSize} flex-shrink-0`}>
+        {member.first_name?.[0]}{member.last_name?.[0]}
+      </div>
+    )
   }
 
   return (
@@ -129,14 +148,22 @@ export default function MembersPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                onClick={() => setSelectedMember(member)}
-                className="bg-gray-800 border border-gray-700 rounded-2xl p-5 hover:border-emerald-500/50 transition-all cursor-pointer"
+                className="bg-gray-800 border border-gray-700 rounded-2xl p-5 hover:border-emerald-500/50 transition-all"
               >
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-                    {member.first_name?.[0]}{member.last_name?.[0]}
-                  </div>
-                  <div className="overflow-hidden flex-1">
+                  <Avatar
+                    member={member}
+                    onClick={(e) => {
+                      if (member.profile_picture_url) {
+                        e.stopPropagation()
+                        setEnlargedImage(member.profile_picture_url)
+                      }
+                    }}
+                  />
+                  <div
+                    className="overflow-hidden flex-1 cursor-pointer"
+                    onClick={() => setSelectedMember(member)}
+                  >
                     <p className="text-white font-semibold truncate">{member.first_name} {member.last_name}</p>
                     <p className="text-emerald-400 text-xs">{member.user_id}</p>
                   </div>
@@ -144,7 +171,7 @@ export default function MembersPage() {
                     {member.account_status}
                   </span>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 cursor-pointer" onClick={() => setSelectedMember(member)}>
                   {member.village && (
                     <div className="flex items-center gap-2">
                       <FaMapMarkerAlt className="text-gray-500 flex-shrink-0" size={11} />
@@ -154,7 +181,7 @@ export default function MembersPage() {
                   {member.position && (
                     <div className="flex items-center gap-2">
                       <FaUserCheck className="text-gray-500 flex-shrink-0" size={11} />
-                      <p className="text-gray-400 text-xs truncate">{member.position.title}</p>
+                      <p className="text-gray-400 text-xs truncate">{member.position}</p>
                     </div>
                   )}
                   <div className="flex items-center gap-2">
@@ -183,9 +210,16 @@ export default function MembersPage() {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-2xl">
-                {selectedMember.first_name?.[0]}{selectedMember.last_name?.[0]}
-              </div>
+              <Avatar
+                member={selectedMember}
+                size="w-16 h-16"
+                textSize="text-2xl"
+                onClick={() => {
+                  if (selectedMember.profile_picture_url) {
+                    setEnlargedImage(selectedMember.profile_picture_url)
+                  }
+                }}
+              />
               <div>
                 <h3 className="text-white font-bold text-xl">{selectedMember.first_name} {selectedMember.last_name}</h3>
                 <p className="text-emerald-400 text-sm">{selectedMember.user_id}</p>
@@ -199,7 +233,7 @@ export default function MembersPage() {
                 { icon: <FaEnvelope />, label: 'Email', value: selectedMember.email },
                 { icon: <FaPhone />, label: 'Phone', value: selectedMember.phone },
                 { icon: <FaMapMarkerAlt />, label: 'Village', value: selectedMember.village?.name },
-                { icon: <FaUserCheck />, label: 'Position', value: selectedMember.position?.title || 'Floor Member' },
+                { icon: <FaUserCheck />, label: 'Position', value: selectedMember.position || 'Floor Member' },
                 { icon: <FaUsers />, label: 'Role', value: selectedMember.role?.replace('_', ' ') },
                 { icon: <FaClock />, label: 'Joined', value: new Date(selectedMember.date_joined).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) },
               ].map((item, i) => (
@@ -221,6 +255,34 @@ export default function MembersPage() {
           </motion.div>
         </div>
       )}
+
+      {/* Enlarged Image Lightbox */}
+      <AnimatePresence>
+        {enlargedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4"
+            onClick={() => setEnlargedImage(null)}
+          >
+            <button
+              onClick={() => setEnlargedImage(null)}
+              className="absolute top-4 right-4 text-white bg-gray-800/80 hover:bg-gray-700 rounded-full p-2 transition-all"
+            >
+              <FaTimes size={20} />
+            </button>
+            <motion.img
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              src={enlargedImage}
+              alt="Enlarged profile"
+              className="max-w-full max-h-[85vh] rounded-2xl object-contain"
+              onClick={e => e.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   )
 }
