@@ -55,13 +55,45 @@ def create_announcement(request):
         )
     serializer = AnnouncementSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save(created_by=request.user)
+        announcement = serializer.save(created_by=request.user)
+
+        # Notify all approved members (in-app)
+        approved_members = CustomUser.objects.filter(account_status='approved')
+        for member in approved_members:
+            try:
+                from notifications.views import create_notification
+                create_notification(
+                    member=member,
+                    title=f'New Announcement: {announcement.title}',
+                    body=announcement.content[:100],
+                    notification_type='announcement'
+                )
+            except Exception as e:
+                print(f"Notification error: {e}")
+
+        # Send push notification to all devices
+        try:
+            from notifications.firebase import send_bulk_notification
+            from notifications.models import DeviceToken
+            all_tokens = list(
+                DeviceToken.objects.filter(
+                    member__account_status='approved'
+                ).values_list('token', flat=True)
+            )
+            if all_tokens:
+                send_bulk_notification(
+                    tokens=all_tokens,
+                    title=f'New Announcement: {announcement.title}',
+                    body=announcement.content[:100],
+                )
+        except Exception as e:
+            print(f"Push notification error: {e}")
+
         return Response({
             'message': 'Announcement created successfully.',
             'data': serializer.data
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
