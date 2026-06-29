@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import leopard from '../assets/leopard.jpg'
 import api from '../api/axios'
+import { onForegroundMessage } from '../firebase'
 import {
   FaHome, FaMoneyBillWave, FaCalendarAlt, FaBullhorn,
   FaUsers, FaPhotoVideo, FaHeart, FaGavel, FaPoll,
@@ -71,11 +72,20 @@ export default function DashboardLayout({ children }) {
   const navItems = getNavItems(user)
 
   useEffect(() => {
+  fetchNotifications()
+  // Poll for new notifications every 30 seconds
+  const interval = setInterval(fetchNotifications, 30000)
+
+  // Listen for foreground push notifications
+  onForegroundMessage((payload) => {
+    toast.success(payload.notification?.title || 'New notification', {
+      duration: 5000,
+    })
     fetchNotifications()
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000)
-    return () => clearInterval(interval)
-  }, [])
+  })
+
+  return () => clearInterval(interval)
+}, [])
 
   const fetchNotifications = async () => {
     try {
