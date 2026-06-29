@@ -15,7 +15,7 @@ export default defineConfig({
         short_name: "UmuaguYouth",
         description: "Community youth platform for Umuagu",
         theme_color: "#0f172a",
-        background_color: "#ffffff",
+        background_color: "#0f172a",
         display: "standalone",
         start_url: "/",
         icons: [
