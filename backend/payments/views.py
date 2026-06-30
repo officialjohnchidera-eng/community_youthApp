@@ -508,8 +508,8 @@ def reactivate_payment_request(request, payment_id):
                     body=f'NGN {payment_request.amount:,.0f} — Late payment window is now open. New deadline: {payment_request.deadline.strftime("%d %B %Y") if payment_request.deadline else "No deadline"}',
                     notification_type='payment'
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Notification error during reactivation: {e}")
 
         return Response({'message': 'Payment request reactivated successfully.'})
     except PaymentRequest.DoesNotExist:
