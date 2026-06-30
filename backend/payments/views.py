@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.conf import settings
 from django.utils import timezone
+from datetime import timedelta
 from .models import PaymentRequest, PaymentTransaction, VillagePaymentStatus
 from .serializers import (
     PaymentRequestSerializer,
@@ -29,6 +30,19 @@ def is_financial_executive(user):
     return user.position and user.position.title in allowed_positions
 
 
+def expire_stale_pending_transactions():
+    """
+    Auto-mark pending transactions older than 15 minutes as failed.
+    A legitimate payment completes within minutes - anything pending
+    longer than that was abandoned, timed out, or never reached Paystack.
+    """
+    cutoff = timezone.now() - timedelta(minutes=15)
+    PaymentTransaction.objects.filter(
+        status='pending',
+        created_at__lt=cutoff
+    ).update(status='failed')
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_payment_request(request):
@@ -42,16 +56,22 @@ def create_payment_request(request):
     if serializer.is_valid():
         payment_request = serializer.save(created_by=request.user)
 
-        from accounts.models import CustomUser
-        from django.core.mail import send_mail
+        # Notify members - wrapped so notification failures NEVER fail the request
+        try:
+            from accounts.models import CustomUser
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail
 
-        approved_members = CustomUser.objects.filter(account_status='approved')
+            approved_members = CustomUser.objects.filter(account_status='approved')
 
-        for member in approved_members:
-            try:
-                send_mail(
-                    subject=f'New Payment Request — {payment_request.title}',
-                    message=f'''Dear {member.first_name},
+            for member in approved_members:
+                # Email via SendGrid (HTTPS, won't hang like SMTP)
+                try:
+                    message = Mail(
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        to_emails=member.email,
+                        subject=f'New Payment Request — {payment_request.title}',
+                        plain_text_content=f'''Dear {member.first_name},
 
 A new payment request has been created by the Treasurer.
 
@@ -64,41 +84,47 @@ Deadline: {payment_request.deadline.strftime("%d %B %Y") if payment_request.dead
 Please log in to your dashboard to make your payment before the deadline.
 
 Umuagu General Youth Association
-''',
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[member.email],
-                    fail_silently=True,
-                )
-            except Exception:
-                pass
+'''
+                    )
+                    sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+                    sg.send(message)
+                except Exception as e:
+                    print(f"Email error for {member.email}: {e}")
 
+                # In-app notification
+                try:
+                    from notifications.views import create_notification
+                    create_notification(
+                        member=member,
+                        title=f'New Payment: {payment_request.title}',
+                        body=f'NGN {payment_request.amount:,.0f} due before {payment_request.deadline.strftime("%d %B %Y") if payment_request.deadline else "no deadline"}. Log in to pay now.',
+                        notification_type='payment'
+                    )
+                except Exception as e:
+                    print(f"Notification error: {e}")
+
+            # Push notification
             try:
-                from notifications.views import create_notification
-                create_notification(
-                    member=member,
-                    title=f'New Payment: {payment_request.title}',
-                    body=f'NGN {payment_request.amount:,.0f} due before {payment_request.deadline.strftime("%d %B %Y") if payment_request.deadline else "no deadline"}. Log in to pay now.',
-                    notification_type='payment'
+                from notifications.firebase import send_bulk_notification
+                from notifications.models import DeviceToken
+                all_tokens = list(
+                    DeviceToken.objects.filter(
+                        member__account_status='approved'
+                    ).values_list('token', flat=True)
                 )
+                if all_tokens:
+                    send_bulk_notification(
+                        tokens=all_tokens,
+                        title=f'New Payment: {payment_request.title}',
+                        body=f'NGN {payment_request.amount:,.2f} due. Login to pay now.',
+                    )
             except Exception as e:
-                print(f"Notification error: {e}")
+                print(f"Push notification error: {e}")
 
-        try:
-            from notifications.firebase import send_bulk_notification
-            from notifications.models import DeviceToken
-            all_tokens = list(
-                DeviceToken.objects.filter(
-                    member__account_status='approved'
-                ).values_list('token', flat=True)
-            )
-            if all_tokens:
-                send_bulk_notification(
-                    tokens=all_tokens,
-                    title=f'New Payment: {payment_request.title}',
-                    body=f'NGN {payment_request.amount:,.2f} due. Login to pay now.',
-                )
-        except Exception:
-            pass
+        except Exception as e:
+            # Catch-all: even if the entire notification block fails,
+            # the payment request itself was already saved successfully
+            print(f"Notification block error: {e}")
 
         return Response({
             'message': 'Payment request created successfully.',
@@ -107,16 +133,15 @@ Umuagu General Youth Association
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# Auto close expired requests
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_payment_requests(request):
-    # Auto close expired requests (moved inside the view, runs per-request not at import time)
-    from django.utils import timezone
+    # Auto close expired requests
     PaymentRequest.objects.filter(
         status='active',
         deadline__lt=timezone.now()
-    ).update(status='closed')    
+    ).update(status='closed')
+
     if request.user.account_status != 'approved':
         return Response(
             {'error': 'Your account is not approved yet.'},
@@ -179,6 +204,7 @@ def initiate_payment(request):
             'email': request.user.email,
             'amount': int(payment_request.amount * 100),
             'reference': reference,
+            'callback_url': f'{settings.FRONTEND_URL}/dashboard/payment-callback',
             'metadata': {
                 'transaction_id': transaction.id,
                 'payment_type': payment_request.payment_type,
@@ -186,22 +212,45 @@ def initiate_payment(request):
             }
         }
 
-        response = requests.post(paystack_url, json=payload, headers=headers)
-        response_data = response.json()
+        # CRITICAL: wrap the entire Paystack call so ANY failure
+        # (timeout, connection error, bad JSON) marks the transaction failed
+        # instead of leaving it stuck as pending forever
+        try:
+            response = requests.post(paystack_url, json=payload, headers=headers, timeout=15)
+            response_data = response.json()
 
-        if response_data['status']:
-            return Response({
-                'message': 'Payment initiated successfully.',
-                'payment_url': response_data['data']['authorization_url'],
-                'reference': reference,
-                'receipt_number': transaction.receipt_number
-            })
-        else:
+            if response.status_code == 200 and response_data.get('status'):
+                return Response({
+                    'message': 'Payment initiated successfully.',
+                    'payment_url': response_data['data']['authorization_url'],
+                    'reference': reference,
+                    'receipt_number': transaction.receipt_number
+                })
+            else:
+                transaction.status = 'failed'
+                transaction.save()
+                return Response(
+                    {'error': response_data.get('message', 'Failed to initiate payment. Please try again.')},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        except requests.exceptions.RequestException as e:
+            # Network error, timeout, connection refused, etc.
             transaction.status = 'failed'
             transaction.save()
+            print(f"Paystack request error: {e}")
             return Response(
-                {'error': 'Failed to initiate payment. Please try again.'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'Could not reach payment provider. Please try again.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except (KeyError, ValueError) as e:
+            # Unexpected response format
+            transaction.status = 'failed'
+            transaction.save()
+            print(f"Paystack response parse error: {e}")
+            return Response(
+                {'error': 'Unexpected error from payment provider. Please try again.'},
+                status=status.HTTP_502_BAD_GATEWAY
             )
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -237,7 +286,6 @@ def paystack_webhook(request):
             transaction.paid_at = timezone.now()
             transaction.save()
 
-            # Mark village as paid
             if transaction.village:
                 VillagePaymentStatus.objects.update_or_create(
                     payment_request=transaction.payment_request,
@@ -249,7 +297,6 @@ def paystack_webhook(request):
                     }
                 )
 
-            # Notify member
             if transaction.member:
                 try:
                     from notifications.views import create_notification
@@ -262,6 +309,18 @@ def paystack_webhook(request):
                 except Exception as e:
                     print(f"Notification error: {e}")
 
+        except PaymentTransaction.DoesNotExist:
+            pass
+
+    elif event == 'charge.failed':
+        reference = payload['data']['reference']
+        try:
+            transaction = PaymentTransaction.objects.get(
+                paystack_reference=reference,
+                status='pending'
+            )
+            transaction.status = 'failed'
+            transaction.save()
         except PaymentTransaction.DoesNotExist:
             pass
 
@@ -281,27 +340,39 @@ def verify_payment(request, reference):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    paystack_url = f'https://api.paystack.co/transaction/verify/{reference}'
-    headers = {'Authorization': f'Bearer {settings.PAYSTACK_SECRET_KEY}'}
-    response = requests.get(paystack_url, headers=headers)
-    response_data = response.json()
+    if transaction.status == 'success':
+        serializer = PaymentTransactionSerializer(transaction)
+        return Response(serializer.data)
 
-    if response_data['status'] and response_data['data']['status'] == 'success':
-        transaction.status = 'success'
-        transaction.paid_at = timezone.now()
-        transaction.save()
+    try:
+        paystack_url = f'https://api.paystack.co/transaction/verify/{reference}'
+        headers = {'Authorization': f'Bearer {settings.PAYSTACK_SECRET_KEY}'}
+        response = requests.get(paystack_url, headers=headers, timeout=15)
+        response_data = response.json()
 
-        # Mark village as paid
-        if transaction.village:
-            VillagePaymentStatus.objects.update_or_create(
-                payment_request=transaction.payment_request,
-                village=transaction.village,
-                defaults={
-                    'status': 'paid',
-                    'paid_at': timezone.now(),
-                    'paid_by': transaction.member
-                }
-            )
+        if response_data.get('status') and response_data['data']['status'] == 'success':
+            transaction.status = 'success'
+            transaction.paid_at = timezone.now()
+            transaction.save()
+
+            if transaction.village:
+                VillagePaymentStatus.objects.update_or_create(
+                    payment_request=transaction.payment_request,
+                    village=transaction.village,
+                    defaults={
+                        'status': 'paid',
+                        'paid_at': timezone.now(),
+                        'paid_by': transaction.member
+                    }
+                )
+        elif response_data.get('data', {}).get('status') in ['failed', 'abandoned']:
+            transaction.status = 'failed'
+            transaction.save()
+
+    except requests.exceptions.RequestException as e:
+        print(f"Verify payment error: {e}")
+        # Don't change status on network error during verification -
+        # let the periodic cleanup handle it if it truly is stale
 
     serializer = PaymentTransactionSerializer(transaction)
     return Response(serializer.data)
@@ -316,6 +387,9 @@ def get_payment_history(request):
             status=status.HTTP_403_FORBIDDEN
         )
 
+    # Auto-expire stale pending transactions before returning history
+    expire_stale_pending_transactions()
+
     if is_financial_executive(request.user):
         transactions = PaymentTransaction.objects.all().order_by('-created_at')
     else:
@@ -323,8 +397,6 @@ def get_payment_history(request):
             member=request.user
         ).order_by('-created_at')
 
-        # For pending - keep only the latest per payment request
-        # For success/failed - keep all
         seen_pending = set()
         filtered = []
         for t in all_transactions:
@@ -340,6 +412,8 @@ def get_payment_history(request):
 
     serializer = PaymentTransactionSerializer(transactions, many=True)
     return Response(serializer.data)
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def close_payment_request(request, payment_id):
@@ -396,7 +470,6 @@ def get_village_payment_status(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_closed_requests(request):
-    from django.utils import timezone
     closed = PaymentRequest.objects.filter(
         models.Q(status='closed') | models.Q(deadline__lt=timezone.now())
     ).order_by('-created_at')
@@ -418,7 +491,6 @@ def reactivate_payment_request(request, payment_id):
             payment_request.deadline = parse_datetime(deadline)
         payment_request.save()
 
-        # Notify all members
         from accounts.models import CustomUser
         from notifications.views import create_notification
         approved_members = CustomUser.objects.filter(account_status='approved')
