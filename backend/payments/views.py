@@ -65,7 +65,6 @@ def create_payment_request(request):
             approved_members = CustomUser.objects.filter(account_status='approved')
 
             for member in approved_members:
-                # Email via SendGrid (HTTPS, won't hang like SMTP)
                 try:
                     message = Mail(
                         from_email=settings.DEFAULT_FROM_EMAIL,
@@ -91,7 +90,6 @@ Umuagu General Youth Association
                 except Exception as e:
                     print(f"Email error for {member.email}: {e}")
 
-                # In-app notification
                 try:
                     from notifications.views import create_notification
                     create_notification(
@@ -103,7 +101,6 @@ Umuagu General Youth Association
                 except Exception as e:
                     print(f"Notification error: {e}")
 
-            # Push notification
             try:
                 from notifications.firebase import send_bulk_notification
                 from notifications.models import DeviceToken
@@ -122,8 +119,6 @@ Umuagu General Youth Association
                 print(f"Push notification error: {e}")
 
         except Exception as e:
-            # Catch-all: even if the entire notification block fails,
-            # the payment request itself was already saved successfully
             print(f"Notification block error: {e}")
 
         return Response({
@@ -136,7 +131,6 @@ Umuagu General Youth Association
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_payment_requests(request):
-    # Auto close expired requests
     PaymentRequest.objects.filter(
         status='active',
         deadline__lt=timezone.now()
@@ -166,7 +160,6 @@ def initiate_payment(request):
         payment_request = serializer.validated_data['payment_request']
         village_id = serializer.validated_data.get('village_id')
 
-        # Restrict monthly dues and levy to Village Presidents only
         if payment_request.payment_type in ['monthly_dues', 'levy']:
             if not request.user.position:
                 return Response(
@@ -183,6 +176,27 @@ def initiate_payment(request):
                     {'error': 'You can only initiate payment for your own village.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
+
+        # Prevent paying twice for the same request
+        already_paid = PaymentTransaction.objects.filter(
+            payment_request=payment_request,
+            member=request.user,
+            status='success'
+        ).exists()
+        if already_paid:
+            return Response(
+                {'error': 'You have already paid for this request.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # CRITICAL FIX: close out any existing pending attempt for this
+        # member+request before starting a new one, so retries never
+        # accumulate phantom pending transactions
+        PaymentTransaction.objects.filter(
+            payment_request=payment_request,
+            member=request.user,
+            status='pending'
+        ).update(status='failed')
 
         reference = f'UMY-{uuid.uuid4().hex[:12].upper()}'
 
@@ -212,9 +226,6 @@ def initiate_payment(request):
             }
         }
 
-        # CRITICAL: wrap the entire Paystack call so ANY failure
-        # (timeout, connection error, bad JSON) marks the transaction failed
-        # instead of leaving it stuck as pending forever
         try:
             response = requests.post(paystack_url, json=payload, headers=headers, timeout=15)
             response_data = response.json()
@@ -235,7 +246,6 @@ def initiate_payment(request):
                 )
 
         except requests.exceptions.RequestException as e:
-            # Network error, timeout, connection refused, etc.
             transaction.status = 'failed'
             transaction.save()
             print(f"Paystack request error: {e}")
@@ -244,7 +254,6 @@ def initiate_payment(request):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
         except (KeyError, ValueError) as e:
-            # Unexpected response format
             transaction.status = 'failed'
             transaction.save()
             print(f"Paystack response parse error: {e}")
@@ -371,8 +380,6 @@ def verify_payment(request, reference):
 
     except requests.exceptions.RequestException as e:
         print(f"Verify payment error: {e}")
-        # Don't change status on network error during verification -
-        # let the periodic cleanup handle it if it truly is stale
 
     serializer = PaymentTransactionSerializer(transaction)
     return Response(serializer.data)
@@ -387,7 +394,6 @@ def get_payment_history(request):
             status=status.HTTP_403_FORBIDDEN
         )
 
-    # Auto-expire stale pending transactions before returning history
     expire_stale_pending_transactions()
 
     if is_financial_executive(request.user):
