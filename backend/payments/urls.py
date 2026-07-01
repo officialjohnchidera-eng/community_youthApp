@@ -19,4 +19,5 @@ urlpatterns = [
     path('village-status/', views.get_village_payment_status, name='village_payment_status'),
     path('requests/closed/', views.get_closed_requests, name='closed_requests'),
     path('requests/reactivate/<int:payment_id>/', views.reactivate_payment_request, name='reactivate_request'),
+    path('requests/<int:payment_id>/audit/', views.get_payment_request_audit, name='payment_audit'),
 ]

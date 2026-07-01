@@ -11,6 +11,7 @@ import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
 import ResetPasswordPage from './pages/auth/ResetPasswordPage'
 
 // Dashboard Pages
+import PaymentAuditPage from './pages/dashboard/PaymentAuditPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import PaymentsPage from './pages/dashboard/PaymentsPage'
 import MeetingsPage from './pages/dashboard/MeetingsPage'
@@ -112,6 +113,7 @@ export default function App() {
       <Route path="/dashboard/reports" element={<ExecRoute><ReportsPage /></ExecRoute>} />
       <Route path="/dashboard/notifications" element={<ApprovedRoute><NotificationsPage /></ApprovedRoute>} />
       <Route path="/dashboard/approvals" element={<PresidentRoute><ApprovalsPage /></PresidentRoute>} />
+      <Route path="/dashboard/payments/:id/audit" element={<ApprovedRoute><PaymentAuditPage /></ApprovedRoute>} />
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" />} />

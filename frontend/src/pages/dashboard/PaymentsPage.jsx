@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { jsPDF } from "jspdf"
 import { motion } from "framer-motion"
 import { FaMoneyBillWave, FaCheckCircle, FaClock, FaTimesCircle, FaExclamationTriangle, FaPlus, FaReceipt, FaDownload, FaRedo } from "react-icons/fa"
@@ -25,6 +26,7 @@ export default function PaymentsPage() {
   const [creatingRequest, setCreatingRequest] = useState(false)
   const [reactivating, setReactivating] = useState(false)
   const [user, setUser] = useState(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     fetchData()
@@ -293,18 +295,28 @@ export default function PaymentsPage() {
 
         {/* Unpaid Request Banners */}
         {unpaidRequests.map((req, i) => (
-          <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-3 flex items-center gap-3">
-            <FaClock className="text-yellow-400 flex-shrink-0" size={16} />
-            <div className="flex-1 min-w-0">
-              <p className="text-yellow-400 font-semibold text-xs truncate">{req.title}</p>
-              <p className="text-gray-400 text-xs mt-0.5">
-                NGN {parseFloat(req.amount || 0).toLocaleString()} · {req.payment_type.replace(/_/g, " ").toUpperCase()}
-                {req.deadline && ` · Due ${new Date(req.deadline).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
-              </p>
-            </div>
-            <button onClick={() => { setSelectedPaymentRequest(String(req.id)); setShowCreateModal(true) }} className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-3 py-1.5 rounded-lg transition-all flex-shrink-0">Pay Now</button>
-          </motion.div>
-        ))}
+  <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-3 flex items-center gap-3">
+    <FaClock className="text-yellow-400 flex-shrink-0" size={16} />
+    <div className="flex-1 min-w-0">
+      <p className="text-yellow-400 font-semibold text-xs truncate">{req.title}</p>
+      <p className="text-gray-400 text-xs mt-0.5">
+        NGN {parseFloat(req.amount || 0).toLocaleString()} · {req.payment_type.replace(/_/g, " ").toUpperCase()}
+        {req.deadline && ` · Due ${new Date(req.deadline).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
+      </p>
+    </div>
+    <div className="flex gap-2 flex-shrink-0">
+      {isFinancialExec && (
+        <button
+          onClick={() => navigate(`/dashboard/payments/${req.id}/audit`)}
+          className="bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs px-3 py-1.5 rounded-lg transition-all"
+        >
+          Audit
+        </button>
+      )}
+      <button onClick={() => { setSelectedPaymentRequest(String(req.id)); setShowCreateModal(true) }} className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-3 py-1.5 rounded-lg transition-all">Pay Now</button>
+    </div>
+  </motion.div>
+))}
 
         {/* Tabs */}
         <div className="flex gap-1 bg-gray-800 border border-gray-700 rounded-xl p-1">

@@ -1,4 +1,5 @@
 from rest_framework import status
+from accounts.models import Village, CustomUser
 from django.db import models
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -514,3 +515,73 @@ def reactivate_payment_request(request, payment_id):
         return Response({'message': 'Payment request reactivated successfully.'})
     except PaymentRequest.DoesNotExist:
         return Response({'error': 'Payment request not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_payment_request_audit(request, payment_id):
+    if not is_financial_executive(request.user):
+        return Response(
+            {'error': 'Permission denied.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    try:
+        payment_request = PaymentRequest.objects.get(id=payment_id)
+    except PaymentRequest.DoesNotExist:
+        return Response({'error': 'Payment request not found.'}, status=404)
+
+    # Query 1: All approved members with their village
+    members = list(
+        CustomUser.objects.filter(account_status='approved')
+        .select_related('village', 'position')
+        .order_by('village__name', 'last_name')
+    )
+
+    # Query 2: IDs of members who have paid successfully
+    paid_member_ids = set(
+        PaymentTransaction.objects.filter(
+            payment_request=payment_request,
+            status='success'
+        ).values_list('member_id', flat=True)
+    )
+
+    # In-memory O(1) status mapping
+    checklist = []
+    paid_count = 0
+    unpaid_count = 0
+
+    for member in members:
+        is_paid = member.id in paid_member_ids
+        if is_paid:
+            paid_count += 1
+        else:
+            unpaid_count += 1
+
+        checklist.append({
+            'user_id': member.user_id,
+            'name': f'{member.first_name} {member.last_name}',
+            'village': member.village.name if member.village else 'N/A',
+            'position': member.position.title if member.position else 'Floor Member',
+            'role': member.role,
+            'status': 'paid' if is_paid else 'unpaid',
+        })
+
+    return Response({
+        'payment_request': {
+            'id': payment_request.id,
+            'title': payment_request.title,
+            'description': payment_request.description,
+            'amount': str(payment_request.amount),
+            'payment_type': payment_request.payment_type,
+            'deadline': payment_request.deadline,
+            'status': payment_request.status,
+        },
+        'summary': {
+            'total_members': len(members),
+            'paid_count': paid_count,
+            'unpaid_count': unpaid_count,
+            'compliance_rate': round((paid_count / len(members) * 100), 1) if members else 0,
+        },
+        'checklist': checklist,
+    })
