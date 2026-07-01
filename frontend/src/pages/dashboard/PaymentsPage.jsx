@@ -11,6 +11,7 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState([])
   const [requests, setRequests] = useState([])
   const [closedRequests, setClosedRequests] = useState([])
+  const [outstandingDebts, setOutstandingDebts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showRequestModal, setShowRequestModal] = useState(false)
@@ -212,17 +213,25 @@ export default function PaymentsPage() {
     }
   }
 
+  // ✅ CORRECT: paidRequestIds = requests this member has SUCCESSFULLY paid
   const paidRequestIds = new Set(
     payments.filter(p => p.status === "success").map(p => p.payment_request?.id)
   )
+
+  // ✅ CORRECT: unpaid = active requests with NO successful payment from this member
   const unpaidRequests = requests.filter(r => !paidRequestIds.has(r.id))
+
+  // ✅ CORRECT: outstanding = CLOSED requests where member has NO successful payment
+  // These represent genuine debts — the deadline passed and they never paid
+  const outstandingRequests = closedRequests.filter(r => !paidRequestIds.has(r.id))
+  const totalOutstanding = outstandingRequests.reduce((a, b) => a + parseFloat(b.amount || 0), 0)
+
   const isFinancialExec = user?.position && ["General Treasurer", "Assistant Treasurer", "General President", "Vice President"].includes(user.position)
   const totalPaid = payments.filter((p) => p.status === "success").reduce((a, b) => a + parseFloat(b.amount || 0), 0)
   const totalPending = payments.filter((p) => p.status === "pending").reduce((a, b) => a + parseFloat(b.amount || 0), 0)
-  const failedPayments = payments.filter((p) => p.status === "failed")
-  const totalDebt = failedPayments.reduce((a, b) => a + parseFloat(b.amount || 0), 0)
   const successfulPayments = payments.filter((p) => p.status === "success")
   const pendingPayments = payments.filter((p) => p.status === "pending")
+  const failedPayments = payments.filter((p) => p.status === "failed")
 
   const statusIcon = (status) => {
     if (status === "success") return <FaCheckCircle className="text-emerald-400 flex-shrink-0" />
@@ -270,7 +279,7 @@ export default function PaymentsPage() {
           {[
             { label: "Total Paid", value: "NGN " + totalPaid.toLocaleString(), color: "emerald", icon: <FaCheckCircle /> },
             { label: "Pending", value: "NGN " + totalPending.toLocaleString(), color: "yellow", icon: <FaClock /> },
-            { label: "Outstanding", value: "NGN " + totalDebt.toLocaleString(), color: "red", icon: <FaExclamationTriangle /> },
+            { label: "Outstanding Debt", value: "NGN " + totalOutstanding.toLocaleString(), color: "red", icon: <FaExclamationTriangle /> },
             { label: "Transactions", value: payments.length, color: "blue", icon: <FaReceipt /> },
           ].map((stat, i) => (
             <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="bg-gray-800 border border-gray-700 rounded-2xl p-3">
@@ -281,42 +290,54 @@ export default function PaymentsPage() {
           ))}
         </div>
 
-        {/* Debt Banner */}
-        {totalDebt > 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-red-500/10 border border-red-500/30 rounded-2xl p-3 flex items-center gap-3">
-            <FaExclamationTriangle className="text-red-400 flex-shrink-0" size={16} />
-            <div className="flex-1 min-w-0">
-              <p className="text-red-400 font-semibold text-xs">Outstanding Debt</p>
-              <p className="text-gray-400 text-xs mt-0.5 truncate">NGN {totalDebt.toLocaleString()} in outstanding payments</p>
+        {/* Outstanding Debt Banner */}
+        {totalOutstanding > 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-red-500/10 border border-red-500/30 rounded-2xl p-3">
+            <div className="flex items-center gap-3 mb-2">
+              <FaExclamationTriangle className="text-red-400 flex-shrink-0" size={16} />
+              <div className="flex-1 min-w-0">
+                <p className="text-red-400 font-semibold text-xs">Outstanding Debt</p>
+                <p className="text-gray-400 text-xs mt-0.5">You have unpaid dues from past payment requests</p>
+              </div>
             </div>
-            <button onClick={() => setShowCreateModal(true)} className="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg transition-all flex-shrink-0">Pay Now</button>
+            <div className="space-y-2">
+              {outstandingRequests.map((req, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 bg-red-500/5 rounded-xl p-2">
+                  <div className="min-w-0">
+                    <p className="text-red-300 text-xs font-medium truncate">{req.title}</p>
+                    <p className="text-gray-500 text-xs">NGN {parseFloat(req.amount || 0).toLocaleString()} · Closed</p>
+                  </div>
+                  <span className="text-red-400 text-xs font-bold flex-shrink-0">OVERDUE</span>
+                </div>
+              ))}
+            </div>
           </motion.div>
         )}
 
         {/* Unpaid Request Banners */}
         {unpaidRequests.map((req, i) => (
-  <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-3 flex items-center gap-3">
-    <FaClock className="text-yellow-400 flex-shrink-0" size={16} />
-    <div className="flex-1 min-w-0">
-      <p className="text-yellow-400 font-semibold text-xs truncate">{req.title}</p>
-      <p className="text-gray-400 text-xs mt-0.5">
-        NGN {parseFloat(req.amount || 0).toLocaleString()} · {req.payment_type.replace(/_/g, " ").toUpperCase()}
-        {req.deadline && ` · Due ${new Date(req.deadline).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
-      </p>
-    </div>
-    <div className="flex gap-2 flex-shrink-0">
-      {isFinancialExec && (
-        <button
-          onClick={() => navigate(`/dashboard/payments/${req.id}/audit`)}
-          className="bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs px-3 py-1.5 rounded-lg transition-all"
-        >
-          Audit
-        </button>
-      )}
-      <button onClick={() => { setSelectedPaymentRequest(String(req.id)); setShowCreateModal(true) }} className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-3 py-1.5 rounded-lg transition-all">Pay Now</button>
-    </div>
-  </motion.div>
-))}
+          <motion.div key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-3 flex items-center gap-3">
+            <FaClock className="text-yellow-400 flex-shrink-0" size={16} />
+            <div className="flex-1 min-w-0">
+              <p className="text-yellow-400 font-semibold text-xs truncate">{req.title}</p>
+              <p className="text-gray-400 text-xs mt-0.5">
+                NGN {parseFloat(req.amount || 0).toLocaleString()} · {req.payment_type.replace(/_/g, " ").toUpperCase()}
+                {req.deadline && ` · Due ${new Date(req.deadline).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
+              </p>
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              {isFinancialExec && (
+                <button
+                  onClick={() => navigate(`/dashboard/payments/${req.id}/audit`)}
+                  className="bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs px-3 py-1.5 rounded-lg transition-all"
+                >
+                  Audit
+                </button>
+              )}
+              <button onClick={() => { setSelectedPaymentRequest(String(req.id)); setShowCreateModal(true) }} className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-3 py-1.5 rounded-lg transition-all">Pay Now</button>
+            </div>
+          </motion.div>
+        ))}
 
         {/* Tabs */}
         <div className="flex gap-1 bg-gray-800 border border-gray-700 rounded-xl p-1">
@@ -324,7 +345,7 @@ export default function PaymentsPage() {
             { key: "overview", label: "All (" + payments.length + ")" },
             { key: "paid", label: "Paid (" + successfulPayments.length + ")" },
             { key: "pending", label: "Pending (" + pendingPayments.length + ")" },
-            { key: "debt", label: "Debt (" + failedPayments.length + ")" },
+            { key: "failed", label: "Failed (" + failedPayments.length + ")" },
           ].map((tab) => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={"flex-1 py-1.5 px-1 rounded-lg text-xs font-medium transition-all " + (activeTab === tab.key ? "bg-emerald-500 text-white shadow-lg" : "text-gray-400 hover:text-white")}>
               {tab.label}
@@ -417,11 +438,10 @@ export default function PaymentsPage() {
                 </div>
               ))}
 
-              {activeTab === "debt" && (failedPayments.length > 0 ? (
+              {activeTab === "failed" && (failedPayments.length > 0 ? (
                 <>
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-3">
-                    <p className="text-red-400 text-xs font-semibold">Total Outstanding: NGN {totalDebt.toLocaleString()}</p>
-                    <p className="text-gray-400 text-xs mt-0.5">Please clear your outstanding dues to remain in good standing</p>
+                  <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-3 mb-3">
+                    <p className="text-gray-400 text-xs">ℹ️ Failed transactions are payment attempts that didn't go through. No money was charged for these.</p>
                   </div>
                   {failedPayments.map((payment, i) => (
                     <div key={i} className="bg-gray-900 rounded-xl p-3 border border-red-500/20">
@@ -435,7 +455,7 @@ export default function PaymentsPage() {
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <p className="text-red-400 font-semibold text-xs">NGN {parseFloat(payment.amount).toLocaleString()}</p>
-                          <button onClick={() => setShowCreateModal(true)} className="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded-lg transition-all">Retry</button>
+                          <span className="text-xs px-2 py-0.5 rounded-full border bg-red-500/10 text-red-400 border-red-500/30">failed</span>
                         </div>
                       </div>
                     </div>
@@ -444,8 +464,7 @@ export default function PaymentsPage() {
               ) : (
                 <div className="text-center py-8">
                   <FaCheckCircle className="text-emerald-500 mx-auto mb-3" size={32} />
-                  <p className="text-gray-400 font-medium text-sm">No outstanding debts!</p>
-                  <p className="text-gray-500 text-xs mt-1">You are up to date with all payments</p>
+                  <p className="text-gray-400 font-medium text-sm">No failed transactions</p>
                 </div>
               ))}
             </div>
@@ -463,7 +482,7 @@ export default function PaymentsPage() {
                 <label className="text-gray-300 text-sm font-medium mb-2 block">Select Payment Request</label>
                 <select value={selectedPaymentRequest} onChange={(e) => setSelectedPaymentRequest(e.target.value)} required className="w-full bg-gray-900 border border-gray-700 text-white rounded-xl py-3 px-4 focus:outline-none focus:border-emerald-500">
                   <option value="">Select a request</option>
-                  {requests.map((r) => (
+                  {requests.filter(r => !paidRequestIds.has(r.id)).map((r) => (
                     <option key={r.id} value={r.id}>{r.title} — NGN {parseFloat(r.amount).toLocaleString()}</option>
                   ))}
                 </select>
@@ -549,7 +568,7 @@ export default function PaymentsPage() {
                 <input type="datetime-local" value={reactivateDeadline} onChange={(e) => setReactivateDeadline(e.target.value)} required className="w-full bg-gray-900 border border-gray-700 text-white rounded-xl py-3 px-4 focus:outline-none focus:border-emerald-500" />
               </div>
               <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3">
-                <p className="text-orange-400 text-xs">⚠️ Reactivating will notify all members and Village Presidents to make payment again.</p>
+                <p className="text-orange-400 text-xs">⚠️ Only members who have NOT paid will see this reactivated request. Members who already paid will not be affected.</p>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowReactivateModal(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl transition-all">Cancel</button>
