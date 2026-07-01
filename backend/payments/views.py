@@ -142,10 +142,23 @@ def get_payment_requests(request):
             {'error': 'Your account is not approved yet.'},
             status=status.HTTP_403_FORBIDDEN
         )
-    payment_requests = PaymentRequest.objects.filter(status='active').order_by('-created_at')
-    serializer = PaymentRequestSerializer(payment_requests, many=True)
-    return Response(serializer.data)
 
+    # Get all active payment requests
+    active_requests = PaymentRequest.objects.filter(status='active').order_by('-created_at')
+
+    # Filter out requests this member has already successfully paid
+    already_paid_ids = set(
+        PaymentTransaction.objects.filter(
+            member=request.user,
+            status='success'
+        ).values_list('payment_request_id', flat=True)
+    )
+
+    # Only return requests the member hasn't paid yet
+    unpaid_requests = [r for r in active_requests if r.id not in already_paid_ids]
+
+    serializer = PaymentRequestSerializer(unpaid_requests, many=True)
+    return Response(serializer.data)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
