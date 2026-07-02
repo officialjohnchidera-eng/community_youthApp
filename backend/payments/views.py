@@ -598,3 +598,300 @@ def get_payment_request_audit(request, payment_id):
         },
         'checklist': checklist,
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def download_receipt(request, reference):
+    try:
+        transaction = PaymentTransaction.objects.get(
+            paystack_reference=reference,
+            status='success'
+        )
+    except PaymentTransaction.DoesNotExist:
+        return Response({'error': 'Receipt not found.'}, status=404)
+
+    if transaction.member != request.user and not is_financial_executive(request.user):
+        return Response({'error': 'Permission denied.'}, status=403)
+
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from io import BytesIO
+    import math
+
+    buffer = BytesIO()
+    width, height = A4
+    c = canvas.Canvas(buffer, pagesize=A4)
+
+    # ─── COLOR PALETTE ────────────────────────────────────────────
+    dark_navy    = colors.HexColor('#0a0f1e')
+    navy         = colors.HexColor('#0f172a')
+    card_dark    = colors.HexColor('#1e293b')
+    card_light   = colors.HexColor('#243044')
+    emerald      = colors.HexColor('#10b981')
+    emerald_dark = colors.HexColor('#059669')
+    emerald_glow = colors.HexColor('#d1fae5')
+    gold         = colors.HexColor('#f59e0b')
+    white        = colors.white
+    light_gray   = colors.HexColor('#e2e8f0')
+    mid_gray     = colors.HexColor('#94a3b8')
+    dark_gray    = colors.HexColor('#475569')
+    border_color = colors.HexColor('#1e3a5f')
+
+    # ─── DARK BACKGROUND ──────────────────────────────────────────
+    c.setFillColor(dark_navy)
+    c.rect(0, 0, width, height, fill=True, stroke=False)
+
+    # ─── SUBTLE GRID PATTERN ──────────────────────────────────────
+    c.setStrokeColor(colors.HexColor('#0d1528'))
+    c.setLineWidth(0.3)
+    for x in range(0, int(width), 20):
+        c.line(x, 0, x, height)
+    for y in range(0, int(height), 20):
+        c.line(0, y, width, y)
+
+    # ─── WATERMARK ────────────────────────────────────────────────
+    c.saveState()
+    c.setFont('Helvetica-Bold', 52)
+    c.setFillColor(colors.HexColor('#0d1a2e'))
+    c.translate(width / 2, height / 2)
+    c.rotate(35)
+    c.drawCentredString(0, 40, "UMUAGU YOUTH")
+    c.drawCentredString(0, -40, "UMUAGU YOUTH")
+    c.drawCentredString(0, 120, "UMUAGU YOUTH")
+    c.drawCentredString(0, -120, "UMUAGU YOUTH")
+    c.restoreState()
+
+    # ─── TOP ACCENT BAR ───────────────────────────────────────────
+    c.setFillColor(emerald)
+    c.rect(0, height - 6*mm, width, 6*mm, fill=True, stroke=False)
+
+    # Gold accent line
+    c.setFillColor(gold)
+    c.rect(0, height - 8*mm, width, 2*mm, fill=True, stroke=False)
+
+    # ─── HEADER SECTION ───────────────────────────────────────────
+    header_y = height - 45*mm
+
+    # Organization name
+    c.setFillColor(white)
+    c.setFont('Helvetica-Bold', 18)
+    c.drawCentredString(width / 2, height - 22*mm, "UMUAGU GENERAL YOUTH ASSOCIATION")
+
+    # Tagline
+    c.setFillColor(mid_gray)
+    c.setFont('Helvetica', 9)
+    c.drawCentredString(width / 2, height - 29*mm, "Umuagu, Ufuma Orumba LGA, Anambra State, Nigeria")
+
+    # Divider line with emerald glow
+    c.setStrokeColor(emerald)
+    c.setLineWidth(1.5)
+    c.line(20*mm, height - 34*mm, width - 20*mm, height - 34*mm)
+
+    # PAYMENT RECEIPT label
+    c.setFillColor(mid_gray)
+    c.setFont('Helvetica', 8)
+    c.drawCentredString(width / 2, height - 39*mm, "OFFICIAL PAYMENT RECEIPT")
+
+    # Receipt number
+    c.setFillColor(emerald)
+    c.setFont('Helvetica-Bold', 8)
+    receipt_num = transaction.receipt_number or reference[:12].upper()
+    c.drawCentredString(width / 2, height - 44*mm, f"#{receipt_num}")
+
+    # ─── SUCCESS BADGE ────────────────────────────────────────────
+    badge_y = height - 65*mm
+    badge_w = 70*mm
+    badge_x = (width - badge_w) / 2
+
+    # Badge glow effect (multiple layers)
+    for i, alpha in enumerate([0.08, 0.12, 0.18]):
+        glow_color = colors.HexColor('#10b981')
+        c.setFillColor(colors.HexColor('#0d2e20'))
+        c.roundRect(badge_x - (i*2), badge_y - (i*2), badge_w + (i*4), 10*mm + (i*4), 5*mm, fill=True, stroke=False)
+
+    c.setFillColor(emerald)
+    c.roundRect(badge_x, badge_y, badge_w, 10*mm, 5*mm, fill=True, stroke=False)
+
+    c.setFillColor(white)
+    c.setFont('Helvetica-Bold', 11)
+    c.drawCentredString(width / 2, badge_y + 3.5*mm, "✓  PAYMENT CONFIRMED")
+
+    # ─── AMOUNT SECTION ───────────────────────────────────────────
+    amount_y = height - 90*mm
+
+    c.setFillColor(mid_gray)
+    c.setFont('Helvetica', 9)
+    c.drawCentredString(width / 2, amount_y + 12*mm, "AMOUNT PAID")
+
+    c.setFillColor(emerald)
+    c.setFont('Helvetica-Bold', 36)
+    amount_text = f"NGN {float(transaction.amount):,.2f}"
+    c.drawCentredString(width / 2, amount_y, amount_text)
+
+    # Underline for amount
+    c.setStrokeColor(emerald_dark)
+    c.setLineWidth(0.8)
+    amount_width = c.stringWidth(amount_text, 'Helvetica-Bold', 36)
+    c.line(
+        width/2 - amount_width/2,
+        amount_y - 2*mm,
+        width/2 + amount_width/2,
+        amount_y - 2*mm
+    )
+
+    # ─── DETAILS CARD ─────────────────────────────────────────────
+    card_x = 15*mm
+    card_y = 65*mm
+    card_w = width - 30*mm
+    card_h = height - 110*mm - 65*mm
+
+    # Card shadow
+    c.setFillColor(colors.HexColor('#060b15'))
+    c.roundRect(card_x + 1.5, card_y - 1.5, card_w, card_h, 4*mm, fill=True, stroke=False)
+
+    # Card background
+    c.setFillColor(card_dark)
+    c.roundRect(card_x, card_y, card_w, card_h, 4*mm, fill=True, stroke=False)
+
+    # Card border
+    c.setStrokeColor(border_color)
+    c.setLineWidth(0.8)
+    c.roundRect(card_x, card_y, card_w, card_h, 4*mm, fill=False, stroke=True)
+
+    # Card header strip
+    c.setFillColor(card_light)
+    c.roundRect(card_x, card_y + card_h - 10*mm, card_w, 10*mm, 4*mm, fill=True, stroke=False)
+    c.rect(card_x, card_y + card_h - 10*mm, card_w, 5*mm, fill=True, stroke=False)
+
+    c.setFillColor(emerald)
+    c.setFont('Helvetica-Bold', 8)
+    c.drawString(card_x + 8*mm, card_y + card_h - 6*mm, "TRANSACTION DETAILS")
+
+    # Detail rows
+    details = [
+        ("Receipt Number", transaction.receipt_number or "N/A"),
+        ("Paystack Reference", transaction.paystack_reference or "N/A"),
+        ("Member Name", str(transaction.member) if transaction.member else "N/A"),
+        ("Member ID", transaction.member.user_id if transaction.member else "N/A"),
+        ("Payment For", transaction.payment_request.title if transaction.payment_request else "N/A"),
+        ("Payment Type", (transaction.payment_request.payment_type or "N/A").replace("_", " ").title() if transaction.payment_request else "N/A"),
+        ("Village", str(transaction.village) if transaction.village else "N/A"),
+        ("Date Initiated", transaction.created_at.strftime("%d %B %Y, %I:%M %p") if transaction.created_at else "N/A"),
+        ("Date Confirmed", transaction.paid_at.strftime("%d %B %Y, %I:%M %p") if transaction.paid_at else "N/A"),
+        ("Status", "SUCCESSFUL ✓"),
+    ]
+
+    row_h = (card_h - 12*mm) / len(details)
+    for i, (label, value) in enumerate(details):
+        row_y = card_y + card_h - 12*mm - (i + 1) * row_h
+
+        # Alternating row background
+        if i % 2 == 0:
+            c.setFillColor(colors.HexColor('#1a2844'))
+            c.rect(card_x + 1, row_y, card_w - 2, row_h, fill=True, stroke=False)
+
+        # Separator line
+        if i > 0:
+            c.setStrokeColor(colors.HexColor('#1e3a5f'))
+            c.setLineWidth(0.3)
+            c.line(card_x + 5*mm, row_y + row_h, card_x + card_w - 5*mm, row_y + row_h)
+
+        # Label
+        c.setFillColor(mid_gray)
+        c.setFont('Helvetica', 7.5)
+        c.drawString(card_x + 6*mm, row_y + row_h/2 - 2, label)
+
+        # Value
+        if label == "Status":
+            c.setFillColor(emerald)
+        else:
+            c.setFillColor(light_gray)
+        c.setFont('Helvetica-Bold', 8)
+
+        # Truncate long values
+        max_val_width = card_w - 70*mm
+        val_text = str(value)
+        while c.stringWidth(val_text, 'Helvetica-Bold', 8) > max_val_width and len(val_text) > 10:
+            val_text = val_text[:-4] + '...'
+
+        c.drawRightString(card_x + card_w - 6*mm, row_y + row_h/2 - 2, val_text)
+
+    # ─── TRANSACTION ID BOX ───────────────────────────────────────
+    txn_box_y = 45*mm
+    txn_box_x = 15*mm
+    txn_box_w = width - 30*mm
+
+    c.setFillColor(colors.HexColor('#0d1f35'))
+    c.roundRect(txn_box_x, txn_box_y, txn_box_w, 14*mm, 3*mm, fill=True, stroke=False)
+    c.setStrokeColor(emerald)
+    c.setLineWidth(0.8)
+    c.roundRect(txn_box_x, txn_box_y, txn_box_w, 14*mm, 3*mm, fill=False, stroke=True)
+
+    c.setFillColor(mid_gray)
+    c.setFont('Helvetica', 7)
+    c.drawCentredString(width / 2, txn_box_y + 9*mm, "TRANSACTION ID")
+
+    c.setFillColor(white)
+    c.setFont('Helvetica-Bold', 9)
+    c.drawCentredString(width / 2, txn_box_y + 4*mm, transaction.paystack_reference or "N/A")
+
+    # ─── BOTTOM ACCENT BAR ────────────────────────────────────────
+    c.setFillColor(card_dark)
+    c.rect(0, 0, width, 35*mm, fill=True, stroke=False)
+
+    c.setStrokeColor(border_color)
+    c.setLineWidth(0.5)
+    c.line(0, 35*mm, width, 35*mm)
+
+    # Footer text
+    c.setFillColor(dark_gray)
+    c.setFont('Helvetica-Oblique', 7)
+    c.drawCentredString(width / 2, 25*mm, "This receipt is computer generated and valid without a physical signature.")
+    c.drawCentredString(width / 2, 20*mm, "Any alteration renders this document invalid.")
+
+    c.setFillColor(mid_gray)
+    c.setFont('Helvetica', 7)
+    c.drawCentredString(width / 2, 13*mm, "Umuagu General Youth Association  •  Ufuma Orumba LGA, Anambra State")
+
+    # Gold bottom bar
+    c.setFillColor(gold)
+    c.rect(0, 0, width, 3*mm, fill=True, stroke=False)
+
+    c.setFillColor(emerald)
+    c.rect(0, 3*mm, width, 2*mm, fill=True, stroke=False)
+
+    # ─── SEAL / STAMP ─────────────────────────────────────────────
+    seal_x = width - 38*mm
+    seal_y = 15*mm
+
+    c.setStrokeColor(emerald)
+    c.setFillColor(colors.HexColor('#0d2e20'))
+    c.setLineWidth(1.5)
+    c.circle(seal_x, seal_y, 12*mm, fill=True, stroke=True)
+
+    c.setStrokeColor(emerald_dark)
+    c.setLineWidth(0.8)
+    c.circle(seal_x, seal_y, 10*mm, fill=False, stroke=True)
+
+    c.setFillColor(emerald)
+    c.setFont('Helvetica-Bold', 6)
+    c.drawCentredString(seal_x, seal_y + 3*mm, "VERIFIED")
+    c.setFont('Helvetica-Bold', 14)
+    c.drawCentredString(seal_x, seal_y - 2*mm, "✓")
+    c.setFont('Helvetica', 5)
+    c.setFillColor(mid_gray)
+    c.drawCentredString(seal_x, seal_y - 6*mm, "OFFICIAL")
+
+    c.save()
+    buffer.seek(0)
+
+    from django.http import HttpResponse
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    filename = f"receipt-{transaction.receipt_number or reference}.pdf"
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
