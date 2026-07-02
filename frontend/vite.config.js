@@ -10,6 +10,9 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "apple-touch-icon.png"],
+      strategies: "injectManifest",
+      srcDir: "public",
+      filename: "firebase-messaging-sw.js",
       manifest: {
         name: "Umuagu Youth App",
         short_name: "UmuaguYouth",
@@ -34,20 +37,6 @@ export default defineConfig({
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
-          },
-        ],
-      },
-      workbox: {
-        runtimeCaching: [
-          {
-            urlPattern:
-              /^https:\/\/communityyouthapp-production\.up\.railway\.app\/api\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache",
-              networkTimeoutSeconds: 10,
-              cacheableResponse: { statuses: [0, 200] },
-            },
           },
         ],
       },

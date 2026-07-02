@@ -56,7 +56,7 @@ export default function PaymentsPage() {
 
   const downloadReceipt = async (payment) => {
     const doc = new jsPDF()
-    const logoUrl = "/src/assets/leopard.jpg"
+    const logoUrl = "/leopard.jpg"
     const img = new Image()
     img.src = logoUrl
     await new Promise((resolve) => { img.onload = resolve })
