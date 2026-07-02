@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { jsPDF } from "jspdf"
 import { motion } from "framer-motion"
 import { FaMoneyBillWave, FaCheckCircle, FaClock, FaTimesCircle, FaExclamationTriangle, FaPlus, FaReceipt, FaDownload, FaRedo } from "react-icons/fa"
 import DashboardLayout from "../../components/DashboardLayout"
@@ -11,7 +10,6 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState([])
   const [requests, setRequests] = useState([])
   const [closedRequests, setClosedRequests] = useState([])
-  const [outstandingDebts, setOutstandingDebts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showRequestModal, setShowRequestModal] = useState(false)
@@ -26,6 +24,7 @@ export default function PaymentsPage() {
   const [creating, setCreating] = useState(false)
   const [creatingRequest, setCreatingRequest] = useState(false)
   const [reactivating, setReactivating] = useState(false)
+  const [downloadingReceipt, setDownloadingReceipt] = useState(null)
   const [user, setUser] = useState(null)
   const navigate = useNavigate()
 
@@ -55,92 +54,22 @@ export default function PaymentsPage() {
   }
 
   const downloadReceipt = async (payment) => {
-    const doc = new jsPDF()
-    const logoUrl = "/leopard.jpg"
-    const img = new Image()
-    img.src = logoUrl
-    await new Promise((resolve) => { img.onload = resolve })
-    doc.setFillColor(15, 17, 23)
-    doc.rect(0, 0, 210, 297, "F")
-    doc.setFillColor(16, 185, 129)
-    doc.roundedRect(88, 13, 30, 30, 4, 4, "F")
-    doc.addImage(img, "JPEG", 89, 14, 28, 28)
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(13)
-    doc.setFont("helvetica", "bold")
-    doc.text("UMUAGU GENERAL YOUTH ASSOCIATION", 105, 68, { align: "center" })
-    doc.setTextColor(100, 200, 150)
-    doc.setFontSize(9)
-    doc.setFont("helvetica", "normal")
-    doc.text("Umuagu, Ufuma Orumba LGA, Anambra State", 105, 76, { align: "center" })
-    doc.setDrawColor(30, 80, 55)
-    doc.setLineWidth(0.5)
-    doc.line(15, 82, 195, 82)
-    doc.setFillColor(16, 185, 129)
-    doc.roundedRect(70, 87, 70, 12, 6, 6, "F")
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(9)
-    doc.setFont("helvetica", "bold")
-    doc.text("PAYMENT SUCCESSFUL", 105, 95, { align: "center" })
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(11)
-    doc.setFont("helvetica", "normal")
-    doc.text("Amount Paid", 105, 112, { align: "center" })
-    doc.setTextColor(16, 185, 129)
-    doc.setFontSize(32)
-    doc.setFont("helvetica", "bold")
-    doc.text("NGN " + parseFloat(payment.amount).toLocaleString() + ".00", 105, 128, { align: "center" })
-    doc.setDrawColor(30, 80, 55)
-    doc.setLineWidth(0.5)
-    doc.line(15, 135, 195, 135)
-    doc.setFillColor(22, 27, 34)
-    doc.roundedRect(12, 140, 186, 110, 4, 4, "F")
-    const details = [
-      ["Receipt No.", payment.receipt_number || "N/A"],
-      ["Reference", payment.paystack_reference || "N/A"],
-      ["Received From", payment.member || "N/A"],
-      ["Payment For", (payment.payment_request?.payment_type || "N/A").replace(/_/g, " ").toUpperCase()],
-      ["Village", payment.village || "N/A"],
-      ["Date", new Date(payment.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })],
-      ["Paid At", payment.paid_at ? new Date(payment.paid_at).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }) : "N/A"],
-    ]
-    let y = 152
-    details.forEach(([label, value], index) => {
-      if (index > 0) {
-        doc.setDrawColor(30, 40, 35)
-        doc.setLineWidth(0.3)
-        doc.line(18, y - 5, 192, y - 5)
-      }
-      doc.setFont("helvetica", "normal")
-      doc.setFontSize(9)
-      doc.setTextColor(120, 150, 130)
-      doc.text(label, 20, y)
-      doc.setFont("helvetica", "bold")
-      doc.setFontSize(9.5)
-      doc.setTextColor(220, 230, 225)
-      doc.text(String(value), 192, y, { align: "right" })
-      y += 14
-    })
-    doc.setFillColor(22, 27, 34)
-    doc.roundedRect(12, 258, 186, 22, 4, 4, "F")
-    doc.setDrawColor(16, 185, 129)
-    doc.setLineWidth(0.5)
-    doc.roundedRect(12, 258, 186, 22, 4, 4, "S")
-    doc.setTextColor(100, 200, 150)
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "normal")
-    doc.text("Transaction ID", 105, 266, { align: "center" })
-    doc.setTextColor(220, 230, 225)
-    doc.setFontSize(9)
-    doc.setFont("helvetica", "bold")
-    doc.text(payment.paystack_reference || "N/A", 105, 274, { align: "center" })
-    doc.setTextColor(60, 80, 70)
-    doc.setFontSize(7.5)
-    doc.setFont("helvetica", "italic")
-    doc.text("This receipt is computer generated and valid without a physical signature.", 105, 285, { align: "center" })
-    doc.text("Any alteration renders this document invalid.", 105, 291, { align: "center" })
-    doc.save("receipt-" + (payment.receipt_number || payment.paystack_reference || "payment") + ".pdf")
-    toast.success("Receipt downloaded!")
+    setDownloadingReceipt(payment.id)
+    const toastId = toast.loading('Generating receipt...')
+    try {
+      const response = await api.get(`/payments/receipt/${payment.paystack_reference}/`, {
+        responseType: 'blob'
+      })
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 15000)
+      toast.success('Receipt opened!', { id: toastId })
+    } catch (error) {
+      toast.error('Failed to generate receipt', { id: toastId })
+    } finally {
+      setDownloadingReceipt(null)
+    }
   }
 
   const handleCreatePayment = async (e) => {
@@ -213,19 +142,12 @@ export default function PaymentsPage() {
     }
   }
 
-  // ✅ CORRECT: paidRequestIds = requests this member has SUCCESSFULLY paid
   const paidRequestIds = new Set(
     payments.filter(p => p.status === "success").map(p => p.payment_request?.id)
   )
-
-  // ✅ CORRECT: unpaid = active requests with NO successful payment from this member
   const unpaidRequests = requests.filter(r => !paidRequestIds.has(r.id))
-
-  // ✅ CORRECT: outstanding = CLOSED requests where member has NO successful payment
-  // These represent genuine debts — the deadline passed and they never paid
   const outstandingRequests = closedRequests.filter(r => !paidRequestIds.has(r.id))
   const totalOutstanding = outstandingRequests.reduce((a, b) => a + parseFloat(b.amount || 0), 0)
-
   const isFinancialExec = user?.position && ["General Treasurer", "Assistant Treasurer", "General President", "Vice President"].includes(user.position)
   const totalPaid = payments.filter((p) => p.status === "success").reduce((a, b) => a + parseFloat(b.amount || 0), 0)
   const totalPending = payments.filter((p) => p.status === "pending").reduce((a, b) => a + parseFloat(b.amount || 0), 0)
@@ -244,6 +166,38 @@ export default function PaymentsPage() {
     if (status === "pending") return "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
     return "bg-red-500/10 text-red-400 border-red-500/30"
   }
+
+  const TransactionCard = ({ payment, borderColor = "border-gray-700" }) => (
+    <div className={`bg-gray-900 rounded-xl p-3 border ${borderColor}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2 min-w-0">
+          {statusIcon(payment.status)}
+          <div className="min-w-0">
+            <p className="text-white font-medium text-xs truncate">{payment.payment_request?.title || payment.paystack_reference}</p>
+            <p className="text-gray-400 text-xs mt-0.5 truncate">{payment.paystack_reference}</p>
+            <p className="text-gray-500 text-xs">{new Date(payment.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          <p className="text-white font-semibold text-xs">NGN {parseFloat(payment.amount).toLocaleString()}</p>
+          <span className={"text-xs px-2 py-0.5 rounded-full border " + statusColor(payment.status)}>{payment.status}</span>
+          {payment.status === "success" && (
+            <button
+              onClick={() => downloadReceipt(payment)}
+              disabled={downloadingReceipt === payment.id}
+              className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 p-1.5 rounded-lg transition-all disabled:opacity-50"
+            >
+              {downloadingReceipt === payment.id ? (
+                <div className="w-2.5 h-2.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <FaDownload size={10} />
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <DashboardLayout>
@@ -295,7 +249,7 @@ export default function PaymentsPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-red-500/10 border border-red-500/30 rounded-2xl p-3">
             <div className="flex items-center gap-3 mb-2">
               <FaExclamationTriangle className="text-red-400 flex-shrink-0" size={16} />
-              <div className="flex-1 min-w-0">
+              <div>
                 <p className="text-red-400 font-semibold text-xs">Outstanding Debt</p>
                 <p className="text-gray-400 text-xs mt-0.5">You have unpaid dues from past payment requests</p>
               </div>
@@ -361,112 +315,46 @@ export default function PaymentsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {activeTab === "overview" && (payments.length > 0 ? payments.map((payment, i) => (
-                <div key={i} className="bg-gray-900 rounded-xl p-3 border border-gray-700">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2 min-w-0">
-                      {statusIcon(payment.status)}
-                      <div className="min-w-0">
-                        <p className="text-white font-medium text-xs truncate">{payment.payment_request?.title || payment.paystack_reference}</p>
-                        <p className="text-gray-400 text-xs mt-0.5 truncate">{payment.paystack_reference}</p>
-                        <p className="text-gray-500 text-xs">{new Date(payment.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
-                      </div>
+              {activeTab === "overview" && (
+                payments.length > 0
+                  ? payments.map((payment, i) => <TransactionCard key={i} payment={payment} />)
+                  : <div className="text-center py-8">
+                      <FaMoneyBillWave className="text-gray-600 mx-auto mb-3" size={32} />
+                      <p className="text-gray-500 text-sm">No transactions yet</p>
                     </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <p className="text-white font-semibold text-xs">NGN {parseFloat(payment.amount).toLocaleString()}</p>
-                      <span className={"text-xs px-2 py-0.5 rounded-full border " + statusColor(payment.status)}>{payment.status}</span>
-                      {payment.status === "success" && (
-                        <button onClick={() => downloadReceipt(payment)} className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 p-1.5 rounded-lg transition-all">
-                          <FaDownload size={10} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )) : (
-                <div className="text-center py-8">
-                  <FaMoneyBillWave className="text-gray-600 mx-auto mb-3" size={32} />
-                  <p className="text-gray-500 text-sm">No transactions yet</p>
-                </div>
-              ))}
+              )}
 
-              {activeTab === "paid" && (successfulPayments.length > 0 ? successfulPayments.map((payment, i) => (
-                <div key={i} className="bg-gray-900 rounded-xl p-3 border border-emerald-500/20">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2 min-w-0">
-                      <FaCheckCircle className="text-emerald-400 flex-shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <p className="text-white font-medium text-xs truncate">{payment.payment_request?.title || payment.paystack_reference}</p>
-                        <p className="text-gray-400 text-xs mt-0.5">{new Date(payment.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
-                      </div>
+              {activeTab === "paid" && (
+                successfulPayments.length > 0
+                  ? successfulPayments.map((payment, i) => <TransactionCard key={i} payment={payment} borderColor="border-emerald-500/20" />)
+                  : <div className="text-center py-8">
+                      <FaCheckCircle className="text-gray-600 mx-auto mb-3" size={32} />
+                      <p className="text-gray-500 text-sm">No successful payments yet</p>
                     </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <p className="text-emerald-400 font-semibold text-xs">NGN {parseFloat(payment.amount).toLocaleString()}</p>
-                      <button onClick={() => downloadReceipt(payment)} className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 p-1.5 rounded-lg transition-all">
-                        <FaDownload size={10} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )) : (
-                <div className="text-center py-8">
-                  <FaCheckCircle className="text-gray-600 mx-auto mb-3" size={32} />
-                  <p className="text-gray-500 text-sm">No successful payments yet</p>
-                </div>
-              ))}
+              )}
 
-              {activeTab === "pending" && (pendingPayments.length > 0 ? pendingPayments.map((payment, i) => (
-                <div key={i} className="bg-gray-900 rounded-xl p-3 border border-yellow-500/20">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2 min-w-0">
-                      <FaClock className="text-yellow-400 flex-shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <p className="text-white font-medium text-xs truncate">{payment.payment_request?.title || payment.paystack_reference}</p>
-                        <p className="text-gray-400 text-xs mt-0.5">{new Date(payment.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
-                      </div>
+              {activeTab === "pending" && (
+                pendingPayments.length > 0
+                  ? pendingPayments.map((payment, i) => <TransactionCard key={i} payment={payment} borderColor="border-yellow-500/20" />)
+                  : <div className="text-center py-8">
+                      <FaClock className="text-gray-600 mx-auto mb-3" size={32} />
+                      <p className="text-gray-500 text-sm">No pending payments</p>
                     </div>
-                    <div className="flex flex-col items-end flex-shrink-0">
-                      <p className="text-yellow-400 font-semibold text-xs">NGN {parseFloat(payment.amount).toLocaleString()}</p>
-                      <span className="text-xs px-2 py-0.5 rounded-full border bg-yellow-500/10 text-yellow-400 border-yellow-500/30 mt-1">pending</span>
-                    </div>
-                  </div>
-                </div>
-              )) : (
-                <div className="text-center py-8">
-                  <FaClock className="text-gray-600 mx-auto mb-3" size={32} />
-                  <p className="text-gray-500 text-sm">No pending payments</p>
-                </div>
-              ))}
+              )}
 
-              {activeTab === "failed" && (failedPayments.length > 0 ? (
-                <>
-                  <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-3 mb-3">
-                    <p className="text-gray-400 text-xs">ℹ️ Failed transactions are payment attempts that didn't go through. No money was charged for these.</p>
-                  </div>
-                  {failedPayments.map((payment, i) => (
-                    <div key={i} className="bg-gray-900 rounded-xl p-3 border border-red-500/20">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-2 min-w-0">
-                          <FaTimesCircle className="text-red-400 flex-shrink-0 mt-0.5" />
-                          <div className="min-w-0">
-                            <p className="text-white font-medium text-xs truncate">{payment.payment_request?.title || payment.paystack_reference}</p>
-                            <p className="text-gray-400 text-xs mt-0.5">{new Date(payment.created_at).toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <p className="text-red-400 font-semibold text-xs">NGN {parseFloat(payment.amount).toLocaleString()}</p>
-                          <span className="text-xs px-2 py-0.5 rounded-full border bg-red-500/10 text-red-400 border-red-500/30">failed</span>
-                        </div>
+              {activeTab === "failed" && (
+                failedPayments.length > 0
+                  ? <>
+                      <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-3 mb-2">
+                        <p className="text-gray-400 text-xs">ℹ️ Failed transactions are payment attempts that didn't go through. No money was charged for these.</p>
                       </div>
+                      {failedPayments.map((payment, i) => <TransactionCard key={i} payment={payment} borderColor="border-red-500/20" />)}
+                    </>
+                  : <div className="text-center py-8">
+                      <FaCheckCircle className="text-emerald-500 mx-auto mb-3" size={32} />
+                      <p className="text-gray-400 font-medium text-sm">No failed transactions</p>
                     </div>
-                  ))}
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <FaCheckCircle className="text-emerald-500 mx-auto mb-3" size={32} />
-                  <p className="text-gray-400 font-medium text-sm">No failed transactions</p>
-                </div>
-              ))}
+              )}
             </div>
           )}
         </motion.div>
