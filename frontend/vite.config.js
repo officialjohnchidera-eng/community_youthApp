@@ -13,6 +13,9 @@ export default defineConfig({
       strategies: "injectManifest",
       srcDir: "public",
       filename: "firebase-messaging-sw.js",
+      injectManifest: {
+        injectionPoint: 'self.__WB_MANIFEST'
+      },
       manifest: {
         name: "Umuagu Youth App",
         short_name: "UmuaguYouth",
@@ -22,22 +25,9 @@ export default defineConfig({
         display: "standalone",
         start_url: "/",
         icons: [
-          {
-            src: "icon-192.png",
-            sizes: "192x192",
-            type: "image/png",
-          },
-          {
-            src: "icon-512.png",
-            sizes: "512x512",
-            type: "image/png",
-          },
-          {
-            src: "icon-512-maskable.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable",
-          },
+          { src: "icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png" },
+          { src: "icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
     }),

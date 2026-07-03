@@ -54,24 +54,28 @@ export default function PaymentsPage() {
   }
 
   const downloadReceipt = async (payment) => {
-    setDownloadingReceipt(payment.id)
-    const toastId = toast.loading('Generating receipt...')
-    try {
-      const response = await api.get(`/payments/receipt/${payment.paystack_reference}/`, {
-        responseType: 'blob'
-      })
-      const blob = new Blob([response.data], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 15000)
-      toast.success('Receipt opened!', { id: toastId })
-    } catch (error) {
-      toast.error('Failed to generate receipt', { id: toastId })
-    } finally {
-      setDownloadingReceipt(null)
-    }
+  setDownloadingReceipt(payment.id)
+  const toastId = toast.loading('Generating receipt...')
+  try {
+    const response = await api.get(`/payments/receipt/${payment.paystack_reference}/`, {
+      responseType: 'blob'
+    })
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `receipt-${payment.receipt_number || payment.paystack_reference}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(url), 15000)
+    toast.success('Receipt downloaded!', { id: toastId })
+  } catch (error) {
+    toast.error('Failed to generate receipt', { id: toastId })
+  } finally {
+    setDownloadingReceipt(null)
   }
-
+}
   const handleCreatePayment = async (e) => {
     e.preventDefault()
     setCreating(true)
