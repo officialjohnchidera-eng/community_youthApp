@@ -60,16 +60,59 @@ export default function PaymentsPage() {
 
     setDownloadingReceipt(payment.id)
 
-    // Open a blank tab synchronously, inside the click handler, so mobile
-    // Safari treats it as a direct user gesture instead of a blocked popup.
-    const newTab = window.open('', '_blank')
+    // Detect iOS (Safari on iPhone/iPad or PWA on iOS)
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 
+    // Detect Android
+    const isAndroid = /android/i.test(navigator.userAgent)
+
+    // Detect PWA (standalone mode)
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true
+
+    if (isIOS) {
+      // iOS Safari and iOS PWA: blob URLs don't open PDFs.
+      // Navigate the current window directly to the receipt URL.
+      // Backend returns inline PDF so Safari renders it natively
+      // with its own share/save sheet. Back button returns to app.
+      toast.loading('Opening receipt...')
+      setTimeout(() => {
+        toast.dismiss()
+        toast.success('Receipt opened!')
+        window.location.href = url
+        setDownloadingReceipt(null)
+      }, 300)
+      return
+    }
+
+    if (isPWA && isAndroid) {
+      // Android PWA: window.open is often blocked inside standalone WebView.
+      // Use an anchor tag with download attribute instead.
+      toast.loading('Downloading receipt...')
+      const a = document.createElement('a')
+      a.href = url
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      a.download = `receipt-${payment.paystack_reference}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => {
+        toast.dismiss()
+        toast.success('Receipt downloading!')
+        setDownloadingReceipt(null)
+      }, 1000)
+      return
+    }
+
+    // Desktop and non-PWA mobile browsers:
+    // Fetch as blob and open in a new tab.
+    const newTab = window.open('', '_blank')
     toast.loading('Opening receipt...')
 
     fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch receipt')
@@ -81,10 +124,9 @@ export default function PaymentsPage() {
         toast.success('Receipt ready!')
 
         if (newTab) {
-          // Point the already-open tab at the blob (desktop + most mobile browsers)
           newTab.location.href = objectUrl
         } else {
-          // Popup was blocked or unavailable - fall back to a direct download link
+          // Popup was blocked — fall back to anchor download
           const a = document.createElement('a')
           a.href = objectUrl
           a.download = `receipt-${payment.paystack_reference}.pdf`
@@ -379,7 +421,7 @@ export default function PaymentsPage() {
                 failedPayments.length > 0
                   ? <>
                       <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-3 mb-2">
-                        <p className="text-gray-400 text-xs">ℹ️ Failed transactions are payment attempts that didn't go through. No money was charged for these.</p>
+                        <p className="text-gray-400 text-xs">Failed transactions are payment attempts that did not go through. No money was charged for these.</p>
                       </div>
                       {failedPayments.map((payment, i) => <TransactionCard key={i} payment={payment} borderColor="border-red-500/20" />)}
                     </>
@@ -418,7 +460,7 @@ export default function PaymentsPage() {
                 </select>
               </div>
               <div className="bg-gray-900 border border-gray-700 rounded-xl p-3">
-                <p className="text-gray-400 text-xs">💡 Once you click Pay Now you will be redirected to Paystack to complete your payment securely.</p>
+                <p className="text-gray-400 text-xs">Once you click Pay Now you will be redirected to Paystack to complete your payment securely.</p>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl transition-all">Cancel</button>
@@ -489,7 +531,7 @@ export default function PaymentsPage() {
                 <input type="datetime-local" value={reactivateDeadline} onChange={(e) => setReactivateDeadline(e.target.value)} required className="w-full bg-gray-900 border border-gray-700 text-white rounded-xl py-3 px-4 focus:outline-none focus:border-emerald-500" />
               </div>
               <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3">
-                <p className="text-orange-400 text-xs">⚠️ Only members who have NOT paid will see this reactivated request. Members who already paid will not be affected.</p>
+                <p className="text-orange-400 text-xs">Only members who have NOT paid will see this reactivated request. Members who already paid will not be affected.</p>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowReactivateModal(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl transition-all">Cancel</button>
