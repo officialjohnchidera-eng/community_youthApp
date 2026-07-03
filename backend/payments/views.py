@@ -641,180 +641,321 @@ def download_receipt(request, reference):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.lib.utils import ImageReader
     from io import BytesIO
+    import os
+    from django.conf import settings
+    import math
 
     buffer = BytesIO()
     width, height = A4
     c = canvas.Canvas(buffer, pagesize=A4)
 
-    # ─── MODERN FINTECH COLOR PALETTE ────────────────────────────
-    # Clean, premium, trust-inducing colors
-    primary = colors.HexColor('#0A0A0F')        # Almost black
-    secondary = colors.HexColor('#1A1A2E')      # Dark navy
-    text_primary = colors.HexColor('#0F172A')   # Slate 900
-    text_secondary = colors.HexColor('#334155') # Slate 700
-    text_muted = colors.HexColor('#64748B')     # Slate 500
-    text_light = colors.HexColor('#94A3B8')     # Slate 400
+    # ─── DARK FINTECH COLOR PALETTE ──────────────────────────────
+    # Premium dark theme with gold accents (inspired by luxury fintech)
+    bg_primary = colors.HexColor('#0A0A0F')        # Almost black
+    bg_secondary = colors.HexColor('#111118')      # Dark navy-black
+    bg_card = colors.HexColor('#1A1A2E')           # Dark card background
+    bg_card_light = colors.HexColor('#222240')     # Slightly lighter card
     
-    accent = colors.HexColor('#0EA5E9')         # Sky Blue 500 (trustworthy)
-    accent_dark = colors.HexColor('#0284C7')    # Sky Blue 600
-    accent_light = colors.HexColor('#E0F2FE')   # Sky Blue 50
+    text_primary = colors.HexColor('#FFFFFF')      # Pure white
+    text_secondary = colors.HexColor('#B0B0C8')    # Soft silver
+    text_muted = colors.HexColor('#6B6B8A')        # Muted gray-purple
+    text_dark = colors.HexColor('#3A3A5A')         # Dark gray
     
-    success = colors.HexColor('#10B981')        # Emerald 500
-    success_dark = colors.HexColor('#059669')   # Emerald 600
-    success_bg = colors.HexColor('#D1FAE5')     # Emerald 100
-    success_text = colors.HexColor('#065F46')   # Emerald 800
+    gold = colors.HexColor('#D4AF37')              # Premium gold
+    gold_light = colors.HexColor('#F0D080')        # Light gold
+    gold_dark = colors.HexColor('#B8962E')         # Dark gold
+    gold_glow = colors.HexColor('#1A1508')         # Gold glow bg
     
-    gold = colors.HexColor('#F59E0B')           # Amber 500
-    gold_light = colors.HexColor('#FEF3C7')     # Amber 100
+    accent = colors.HexColor('#C9A84C')            # Gold accent
+    accent_dark = colors.HexColor('#A8892E')       # Darker gold
     
-    border = colors.HexColor('#E2E8F0')         # Slate 200
-    border_light = colors.HexColor('#F1F5F9')   # Slate 50
-    card_bg = colors.white
+    success = colors.HexColor('#10B981')           # Emerald green
+    success_bg = colors.HexColor('#064E3B')        # Dark emerald
     
-    # ─── CLEAN WHITE CANVAS ────────────────────────────────────────
-    c.setFillColor(colors.white)
+    border = colors.HexColor('#2A2A44')            # Border color
+    border_light = colors.HexColor('#333355')      # Lighter border
+    
+    # ─── DARK BACKGROUND ──────────────────────────────────────────
+    # Solid dark background with subtle gradient effect
+    c.setFillColor(bg_primary)
     c.rect(0, 0, width, height, fill=True, stroke=False)
     
-    # Top accent bar - gradient effect with two colors
-    c.setFillColor(accent)
-    c.rect(0, height - 4*mm, width, 4*mm, fill=True, stroke=False)
-    c.setFillColor(accent_dark)
-    c.rect(0, height - 4*mm, width * 0.3, 4*mm, fill=True, stroke=False)
+    # Subtle radial gradient effect (simulated with overlapping rects)
+    for i in range(100, 0, -5):
+        alpha = 0.002
+        c.setFillColor(colors.HexColor('#1A1A30'))
+        c.rect(
+            width/2 - i*mm/2, 
+            height/2 - i*mm/2, 
+            i*mm, 
+            i*mm, 
+            fill=True, 
+            stroke=False
+        )
+    
+    # ─── WATERMARK: "UMUAGU YOUTH" ───────────────────────────────
+    c.saveState()
+    c.setFont('Helvetica-Bold', 72)
+    c.setFillColor(colors.HexColor('#0D0D18'))
+    c.translate(width / 2, height / 2)
+    c.rotate(35)
+    
+    # Multiple watermark layers for depth
+    for i, offset in enumerate([-160, -80, 0, 80, 160]):
+        c.drawCentredString(0, offset, "UMUAGU YOUTH")
+    
+    # Second layer offset for density
+    for i, offset in enumerate([-120, -40, 40, 120]):
+        c.drawCentredString(20, offset, "UMUAGU YOUTH")
+    
+    c.restoreState()
+
+    # ─── TOP ACCENT BARS ──────────────────────────────────────────
+    # Main gold bar with gradient effect
+    c.setFillColor(gold)
+    c.rect(0, height - 5*mm, width, 5*mm, fill=True, stroke=False)
+    
+    # Secondary gold glow bar
+    c.setFillColor(gold_dark)
+    c.rect(0, height - 5*mm, width * 0.4, 5*mm, fill=True, stroke=False)
     
     # Bottom accent bar
-    c.setFillColor(accent)
-    c.rect(0, 0, width, 2.5*mm, fill=True, stroke=False)
+    c.setFillColor(gold)
+    c.rect(0, 0, width, 3*mm, fill=True, stroke=False)
+    c.setFillColor(gold_dark)
+    c.rect(0, 0, width * 0.6, 3*mm, fill=True, stroke=False)
 
-    # ─── HEADER SECTION ────────────────────────────────────────────
-    margin = 18*mm
-    content_w = width - 2*margin
-    y = height - 4*mm - 16*mm
+    # ─── LEOPARD LOGO ─────────────────────────────────────────────
+    # Try to load leopard logo image from static files
+    logo_path = None
     
-    # Logo placeholder with modern design
-    logo_size = 8*mm
-    logo_x = margin
-    logo_y = y
+    # Check common locations for the logo
+    possible_paths = [
+        os.path.join(settings.BASE_DIR, 'static', 'images', 'leopard_logo.png'),
+        os.path.join(settings.BASE_DIR, 'static', 'img', 'leopard_logo.png'),
+        os.path.join(settings.BASE_DIR, 'media', 'logos', 'leopard.png'),
+        os.path.join(settings.BASE_DIR, 'static', 'leopard.png'),
+        os.path.join(settings.STATIC_ROOT, 'images', 'leopard_logo.png') if hasattr(settings, 'STATIC_ROOT') else None,
+    ]
     
-    # Outer circle with gradient effect
-    c.setFillColor(accent_light)
-    c.circle(logo_x, logo_y, logo_size, fill=True, stroke=False)
-    c.setStrokeColor(accent)
-    c.setLineWidth(1.5)
-    c.circle(logo_x, logo_y, logo_size, fill=False, stroke=True)
+    # Filter out None paths
+    possible_paths = [p for p in possible_paths if p is not None]
     
-    # Inner circle
-    c.setStrokeColor(accent_dark)
-    c.setLineWidth(0.8)
-    c.circle(logo_x, logo_y, logo_size - 2*mm, fill=False, stroke=True)
+    for path in possible_paths:
+        if os.path.exists(path):
+            logo_path = path
+            break
     
-    # Brand initial
-    c.setFillColor(accent)
-    c.setFont('Helvetica-Bold', 14)
-    c.drawCentredString(logo_x, logo_y - 3*mm, "U")
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo = ImageReader(logo_path)
+            logo_size = 18*mm
+            logo_x = 18*mm
+            logo_y = height - 5*mm - 12*mm - logo_size/2
+            
+            # Draw logo with gold glow behind it
+            glow_size = logo_size + 6*mm
+            c.setFillColor(gold_glow)
+            c.circle(logo_x + logo_size/2, logo_y + logo_size/2, glow_size/2, fill=True, stroke=False)
+            
+            # Draw the actual logo
+            c.drawImage(
+                logo, 
+                logo_x, 
+                logo_y, 
+                width=logo_size, 
+                height=logo_size,
+                mask='auto'
+            )
+            
+            # Gold ring around logo
+            c.setStrokeColor(gold)
+            c.setLineWidth(1.5)
+            c.circle(logo_x + logo_size/2, logo_y + logo_size/2, logo_size/2 + 2*mm, fill=False, stroke=True)
+            
+        except Exception as e:
+            print(f"Logo loading error: {e}")
+            # Fallback to text logo if image can't be loaded
+            logo_x = 18*mm
+            logo_y = height - 5*mm - 12*mm
+            
+            # Fallback leopard emoji/text logo
+            c.setFillColor(gold)
+            c.setFont('Helvetica-Bold', 24)
+            c.drawString(logo_x, logo_y, "🐆")
+            c.setFont('Helvetica-Bold', 10)
+            c.setFillColor(text_muted)
+            c.drawString(logo_x + 12*mm, logo_y - 2*mm, "UMUAGU")
+    else:
+        # Fallback text logo if image doesn't exist
+        logo_x = 18*mm
+        logo_y = height - 5*mm - 12*mm
+        
+        # Gold circle background
+        c.setFillColor(gold_glow)
+        c.circle(logo_x + 10*mm, logo_y - 2*mm, 14*mm, fill=True, stroke=False)
+        
+        # Leopard emoji
+        c.setFillColor(gold)
+        c.setFont('Helvetica-Bold', 28)
+        c.drawString(logo_x, logo_y, "🐆")
+        
+        # Organization name next to logo
+        c.setFont('Helvetica-Bold', 14)
+        c.setFillColor(text_primary)
+        c.drawString(logo_x + 22*mm, logo_y + 4*mm, "UMUAGU")
+        c.setFont('Helvetica-Bold', 10)
+        c.setFillColor(text_muted)
+        c.drawString(logo_x + 22*mm, logo_y - 4*mm, "YOUTH ASSOCIATION")
+
+    # ─── HEADER - Organization name and receipt badge ─────────────
+    if logo_path and os.path.exists(logo_path):
+        org_x = 18*mm + 18*mm + 8*mm
+    else:
+        org_x = 18*mm + 22*mm + 8*mm
     
-    # Organization name
-    org_x = logo_x + logo_size + 5*mm
-    c.setFillColor(primary)
-    c.setFont('Helvetica-Bold', 14)
-    c.drawString(org_x, y + 2*mm, "Umuagu General Youth")
-    c.setFont('Helvetica-Bold', 11)
-    c.drawString(org_x, y - 4.5*mm, "Association")
+    org_y = height - 5*mm - 6*mm
     
-    # Tagline
+    c.setFillColor(text_primary)
+    c.setFont('Helvetica-Bold', 16)
+    c.drawString(org_x, org_y + 6*mm, "UMUAGU GENERAL YOUTH")
+    c.setFont('Helvetica-Bold', 13)
+    c.drawString(org_x, org_y, "ASSOCIATION")
+    
     c.setFillColor(text_muted)
-    c.setFont('Helvetica', 6.5)
-    c.drawString(org_x, y - 9*mm, "Umuagu, Ufuma • Orumba LGA, Anambra State")
+    c.setFont('Helvetica', 7)
+    c.drawString(org_x, org_y - 5*mm, "Umuagu, Ufuma • Orumba LGA, Anambra State")
     
     # Receipt badge on the right
-    badge_w = 35*mm
-    badge_h = 14*mm
-    badge_x = width - margin - badge_w
+    badge_w = 40*mm
+    badge_h = 16*mm
+    badge_x = width - 18*mm - badge_w
+    badge_y = org_y - 4*mm
     
-    # Badge background with subtle gradient
-    c.setFillColor(accent_light)
-    c.roundRect(badge_x, y - 4*mm, badge_w, badge_h, 3*mm, fill=True, stroke=False)
-    c.setStrokeColor(accent)
-    c.setLineWidth(0.8)
-    c.roundRect(badge_x, y - 4*mm, badge_w, badge_h, 3*mm, fill=False, stroke=True)
+    # Badge background with gold gradient
+    c.setFillColor(gold_glow)
+    c.roundRect(badge_x, badge_y, badge_w, badge_h, 4*mm, fill=True, stroke=False)
+    c.setStrokeColor(gold)
+    c.setLineWidth(1.2)
+    c.roundRect(badge_x, badge_y, badge_w, badge_h, 4*mm, fill=False, stroke=True)
     
-    c.setFillColor(accent)
+    c.setFillColor(gold)
     c.setFont('Helvetica-Bold', 6)
-    c.drawCentredString(badge_x + badge_w/2, y - 1*mm, "RECEIPT")
+    c.drawCentredString(badge_x + badge_w/2, badge_y + 10*mm, "RECEIPT")
     receipt_num = transaction.receipt_number or reference[:12].upper()
-    c.setFont('Helvetica-Bold', 8)
-    c.drawCentredString(badge_x + badge_w/2, y - 6.5*mm, f"#{receipt_num}")
+    c.setFont('Helvetica-Bold', 10)
+    c.drawCentredString(badge_x + badge_w/2, badge_y + 3.5*mm, f"#{receipt_num}")
+
+    # ─── DECORATIVE DIVIDER ──────────────────────────────────────
+    y = height - 5*mm - 42*mm
     
-    y -= 18*mm
-    
-    # ─── DIVIDER ────────────────────────────────────────────────────
-    c.setStrokeColor(border)
+    # Gold divider with center diamond
+    c.setStrokeColor(gold)
     c.setLineWidth(0.8)
-    c.line(margin, y, width - margin, y)
+    c.line(18*mm, y, width - 18*mm, y)
+    
+    # Center diamond
+    c.setFillColor(gold)
+    diamond_size = 2.5*mm
+    c.polygon([
+        width/2, y + diamond_size,
+        width/2 + diamond_size, y,
+        width/2, y - diamond_size,
+        width/2 - diamond_size, y
+    ], fill=True, stroke=False)
     
     y -= 12*mm
 
     # ─── SUCCESS BADGE ─────────────────────────────────────────────
-    badge_icon_size = 10*mm
+    badge_icon_size = 12*mm
     badge_icon_x = width/2
     badge_icon_y = y
     
     # Glow effect (multiple layers)
-    for i, alpha in enumerate([0.05, 0.08, 0.12]):
-        c.setFillColor(colors.HexColor('#10B981'))
-        c.circle(badge_icon_x, badge_icon_y, badge_icon_size + i*2*mm, fill=True, stroke=False)
+    for i in range(4):
+        glow_color = colors.HexColor('#D4AF37') if i % 2 == 0 else colors.HexColor('#1A1508')
+        c.setFillColor(glow_color)
+        c.circle(
+            badge_icon_x, 
+            badge_icon_y, 
+            badge_icon_size + i*2.5*mm, 
+            fill=True, 
+            stroke=False
+        )
     
-    # Main circle
-    c.setFillColor(success_bg)
+    # Main circle with dark background
+    c.setFillColor(bg_card)
     c.circle(badge_icon_x, badge_icon_y, badge_icon_size, fill=True, stroke=False)
-    c.setStrokeColor(success)
-    c.setLineWidth(1.5)
+    c.setStrokeColor(gold)
+    c.setLineWidth(2)
     c.circle(badge_icon_x, badge_icon_y, badge_icon_size, fill=False, stroke=True)
     
     # Checkmark
-    c.setFillColor(success)
+    c.setFillColor(gold)
+    c.setFont('Helvetica-Bold', 20)
+    c.drawCentredString(badge_icon_x, badge_icon_y - 4.5*mm, "✓")
+    
+    y -= badge_icon_size + 14*mm
+    
+    # Status text with gold
+    c.setFillColor(gold)
     c.setFont('Helvetica-Bold', 16)
-    c.drawCentredString(badge_icon_x, badge_icon_y - 4*mm, "✓")
-    
-    y -= badge_icon_size + 10*mm
-    
-    # Status text
-    c.setFillColor(text_primary)
-    c.setFont('Helvetica-Bold', 14)
-    c.drawCentredString(width/2, y, "Payment Confirmed")
+    c.drawCentredString(width/2, y, "PAYMENT CONFIRMED")
     
     y -= 6*mm
     c.setFillColor(text_muted)
     c.setFont('Helvetica', 8)
-    c.drawCentredString(width/2, y, "Your transaction has been successfully verified")
+    c.drawCentredString(width/2, y, "Transaction successfully verified and completed")
     
-    y -= 12*mm
+    y -= 14*mm
 
     # ─── AMOUNT CARD ───────────────────────────────────────────────
-    amount_card_h = 25*mm
+    amount_card_h = 28*mm
     amount_card_y = y - amount_card_h
     
     # Card shadow
-    c.setFillColor(colors.HexColor('#F8FAFC'))
-    c.roundRect(margin + 1*mm, amount_card_y - 1*mm, content_w, amount_card_h, 4*mm, fill=True, stroke=False)
+    c.setFillColor(colors.HexColor('#050508'))
+    c.roundRect(18*mm + 1.5*mm, amount_card_y - 1.5*mm, width - 36*mm, amount_card_h, 6*mm, fill=True, stroke=False)
     
     # Card background
-    c.setFillColor(accent_light)
-    c.roundRect(margin, amount_card_y, content_w, amount_card_h, 4*mm, fill=True, stroke=False)
-    c.setStrokeColor(accent)
-    c.setLineWidth(0.8)
-    c.roundRect(margin, amount_card_y, content_w, amount_card_h, 4*mm, fill=False, stroke=True)
+    c.setFillColor(bg_card)
+    c.roundRect(18*mm, amount_card_y, width - 36*mm, amount_card_h, 6*mm, fill=True, stroke=False)
+    
+    # Card border with gold
+    c.setStrokeColor(gold)
+    c.setLineWidth(1.2)
+    c.roundRect(18*mm, amount_card_y, width - 36*mm, amount_card_h, 6*mm, fill=False, stroke=True)
+    
+    # Gold accent line on card
+    c.setFillColor(gold)
+    c.roundRect(18*mm, amount_card_y + amount_card_h - 3*mm, width - 36*mm, 3*mm, 6*mm, fill=True, stroke=False)
+    c.rect(18*mm, amount_card_y + amount_card_h - 3*mm, width - 36*mm, 1.5*mm, fill=True, stroke=False)
     
     # Amount label
     c.setFillColor(text_muted)
-    c.setFont('Helvetica-Bold', 7)
-    c.drawCentredString(width/2, amount_card_y + 14*mm, "AMOUNT PAID")
+    c.setFont('Helvetica-Bold', 8)
+    c.drawCentredString(width/2, amount_card_y + 16*mm, "AMOUNT PAID")
     
-    # Amount value
+    # Amount value with gold
     amount_text = f"₦{float(transaction.amount):,.2f}"
-    c.setFillColor(text_primary)
-    c.setFont('Helvetica-Bold', 28)
+    c.setFillColor(gold)
+    c.setFont('Helvetica-Bold', 30)
     c.drawCentredString(width/2, amount_card_y + 4*mm, amount_text)
+    
+    # Decorative line under amount
+    c.setStrokeColor(gold_dark)
+    c.setLineWidth(1)
+    amount_width = c.stringWidth(amount_text, 'Helvetica-Bold', 30)
+    c.line(
+        width/2 - amount_width/2 - 8*mm,
+        amount_card_y + 1*mm,
+        width/2 + amount_width/2 + 8*mm,
+        amount_card_y + 1*mm
+    )
     
     y = amount_card_y - 14*mm
 
@@ -837,24 +978,28 @@ def download_receipt(request, reference):
     table_y = y - table_h
     
     # Table background
-    c.setFillColor(colors.white)
-    c.roundRect(margin, table_y, content_w, table_h, 4*mm, fill=True, stroke=False)
+    c.setFillColor(bg_card)
+    c.roundRect(18*mm, table_y, width - 36*mm, table_h, 6*mm, fill=True, stroke=False)
     c.setStrokeColor(border)
     c.setLineWidth(0.8)
-    c.roundRect(margin, table_y, content_w, table_h, 4*mm, fill=False, stroke=True)
+    c.roundRect(18*mm, table_y, width - 36*mm, table_h, 6*mm, fill=False, stroke=True)
     
-    # Table header row
+    # Table header row with gold accent
     header_y = y - 2*mm
-    c.setFillColor(border_light)
-    c.rect(margin, header_y - row_h, content_w, row_h, fill=True, stroke=False)
+    c.setFillColor(bg_card_light)
+    c.rect(18*mm, header_y - row_h, width - 36*mm, row_h, fill=True, stroke=False)
     c.setStrokeColor(border)
     c.setLineWidth(0.5)
-    c.line(margin, header_y - row_h, width - margin, header_y - row_h)
+    c.line(18*mm, header_y - row_h, width - 18*mm, header_y - row_h)
+    
+    # Gold accent on header
+    c.setFillColor(gold)
+    c.rect(18*mm, header_y - row_h, 3*mm, row_h, fill=True, stroke=False)
     
     c.setFillColor(text_muted)
     c.setFont('Helvetica-Bold', 6.5)
-    c.drawString(margin + 7*mm, header_y - row_h/2 - 2, "FIELD")
-    c.drawRightString(width - margin - 7*mm, header_y - row_h/2 - 2, "VALUE")
+    c.drawString(18*mm + 9*mm, header_y - row_h/2 - 2, "FIELD")
+    c.drawRightString(width - 18*mm - 7*mm, header_y - row_h/2 - 2, "VALUE")
     
     # Detail rows
     for i, (label, value) in enumerate(details):
@@ -862,106 +1007,120 @@ def download_receipt(request, reference):
         
         # Alternating row backgrounds
         if i % 2 == 0:
-            c.setFillColor(border_light)
-            c.rect(margin, row_y, content_w, row_h, fill=True, stroke=False)
+            c.setFillColor(colors.HexColor('#131325'))
+            c.rect(18*mm, row_y, width - 36*mm, row_h, fill=True, stroke=False)
         
         # Row separator
         if i < len(details) - 1:
             c.setStrokeColor(border)
-            c.setLineWidth(0.5)
-            c.line(margin + 5*mm, row_y, width - margin - 5*mm, row_y)
+            c.setLineWidth(0.3)
+            c.line(18*mm + 8*mm, row_y, width - 18*mm - 8*mm, row_y)
         
         text_y = row_y + row_h/2 - 2
         
         # Label
-        c.setFillColor(text_secondary)
+        c.setFillColor(text_muted)
         c.setFont('Helvetica', 7)
-        c.drawString(margin + 7*mm, text_y, label)
+        c.drawString(18*mm + 9*mm, text_y, label)
         
         # Value
         if label == "Status":
-            # Pill for status
+            # Gold pill for status
             pill_text = "SUCCESSFUL"
             c.setFont('Helvetica-Bold', 6.5)
-            pill_w = c.stringWidth(pill_text, 'Helvetica-Bold', 6.5) + 8*mm
-            pill_x = width - margin - 7*mm - pill_w
+            pill_w = c.stringWidth(pill_text, 'Helvetica-Bold', 6.5) + 10*mm
+            pill_x = width - 18*mm - 7*mm - pill_w
             pill_y = text_y - 1.8*mm
-            c.setFillColor(success_bg)
-            c.roundRect(pill_x, pill_y, pill_w, 5*mm, 2.5*mm, fill=True, stroke=False)
-            c.setFillColor(success_text)
+            
+            # Pill background
+            c.setFillColor(colors.HexColor('#064E3B'))
+            c.roundRect(pill_x, pill_y, pill_w, 5.5*mm, 2.8*mm, fill=True, stroke=False)
+            c.setStrokeColor(gold)
+            c.setLineWidth(0.8)
+            c.roundRect(pill_x, pill_y, pill_w, 5.5*mm, 2.8*mm, fill=False, stroke=True)
+            
+            # Pill text
+            c.setFillColor(gold)
             c.drawCentredString(pill_x + pill_w/2, text_y, pill_text)
         else:
-            c.setFillColor(text_primary)
+            c.setFillColor(text_secondary)
             c.setFont('Helvetica', 7)
-            max_width = content_w - 80*mm
+            max_width = (width - 36*mm) - 80*mm
             val_text = str(value)
             while c.stringWidth(val_text, 'Helvetica', 7) > max_width and len(val_text) > 6:
                 val_text = val_text[:-3] + '...'
-            c.drawRightString(width - margin - 7*mm, text_y, val_text)
+            c.drawRightString(width - 18*mm - 7*mm, text_y, val_text)
     
-    y = table_y - 12*mm
+    y = table_y - 14*mm
 
     # ─── FOOTER SECTION ────────────────────────────────────────────
-    # Divider
-    c.setStrokeColor(border)
-    c.setLineWidth(0.5)
-    c.line(margin, y, width - margin, y)
+    # Gold divider
+    c.setStrokeColor(gold)
+    c.setLineWidth(0.8)
+    c.line(18*mm, y, width - 18*mm, y)
     
     y -= 8*mm
     
-    # Footer text
+    # Footer text in gold
     c.setFillColor(text_muted)
     c.setFont('Helvetica', 6.5)
     c.drawCentredString(width/2, y, "This receipt is electronically generated and requires no physical signature")
     
     y -= 5*mm
+    c.setFillColor(text_dark)
     c.setFont('Helvetica', 6)
     c.drawCentredString(width/2, y, "Any unauthorized alteration renders this document invalid")
     
     y -= 7*mm
     
-    # Transaction ID reference
-    c.setFillColor(text_light)
-    c.setFont('Helvetica', 5.5)
-    c.drawCentredString(width/2, y, f"Transaction Reference: {transaction.paystack_reference or 'N/A'}")
-    
-    # ─── QR CODE PLACEHOLDER ───────────────────────────────────────
-    # (Optional - adds a modern touch)
-    qr_size = 12*mm
-    qr_x = width - margin - qr_size
-    qr_y = y - qr_size - 3*mm
-    
-    # QR placeholder box
-    c.setFillColor(border_light)
-    c.rect(qr_x, qr_y, qr_size, qr_size, fill=True, stroke=False)
-    c.setStrokeColor(border)
-    c.setLineWidth(0.5)
-    c.rect(qr_x, qr_y, qr_size, qr_size, fill=False, stroke=True)
-    
-    # QR pattern simulation (dots)
-    c.setFillColor(text_light)
-    dot_size = 1*mm
-    for i in range(5):
-        for j in range(5):
-            if (i + j) % 2 == 0:
-                c.rect(
-                    qr_x + 1.5*mm + i*2*mm,
-                    qr_y + 1.5*mm + j*2*mm,
-                    dot_size, dot_size,
-                    fill=True, stroke=False
-                )
-    
-    c.setFillColor(text_light)
-    c.setFont('Helvetica', 4.5)
-    c.drawCentredString(qr_x + qr_size/2, qr_y - 2.5*mm, "SCAN TO VERIFY")
-    
-    # ─── ORGANIZATION DETAILS ──────────────────────────────────────
-    org_details_y = qr_y - 8*mm
+    # Transaction reference with gold highlight
     c.setFillColor(text_muted)
     c.setFont('Helvetica', 5.5)
-    c.drawString(margin, org_details_y, "Umuagu General Youth Association")
-    c.drawString(margin, org_details_y - 3.5*mm, "Umuagu, Ufuma")
-    c.drawString(margin, org_details_y - 7*mm, "Orumba LGA, Anambra State, Nigeria")
+    c.drawCentredString(width/2, y, f"Transaction ID: {transaction.paystack_reference or 'N/A'}")
+    
+    # ─── GOLD SEAL / STAMP ─────────────────────────────────────────
+    seal_x = width - 18*mm - 8*mm
+    seal_y = 18*mm
+    
+    # Outer ring
+    c.setStrokeColor(gold)
+    c.setFillColor(colors.HexColor('#0D0D18'))
+    c.setLineWidth(1.5)
+    c.circle(seal_x, seal_y, 10*mm, fill=True, stroke=True)
+    
+    # Inner ring
+    c.setStrokeColor(gold_dark)
+    c.setLineWidth(0.8)
+    c.circle(seal_x, seal_y, 8*mm, fill=False, stroke=True)
+    
+    # Seal content
+    c.setFillColor(gold)
+    c.setFont('Helvetica-Bold', 5)
+    c.drawCentredString(seal_x, seal_y + 5*mm, "VERIFIED")
+    c.setFont('Helvetica-Bold', 18)
+    c.drawCentredString(seal_x, seal_y - 1*mm, "✓")
+    c.setFont('Helvetica', 4.5)
+    c.setFillColor(text_muted)
+    c.drawCentredString(seal_x, seal_y - 5.5*mm, "OFFICIAL SEAL")
+    
+    # ─── ORGANIZATION DETAILS (left side) ─────────────────────────
+    org_footer_y = 18*mm
+    c.setFillColor(text_muted)
+    c.setFont('Helvetica', 5.5)
+    c.drawString(18*mm, org_footer_y + 6*mm, "Umuagu General Youth Association")
+    c.drawString(18*mm, org_footer_y + 2.5*mm, "Umuagu, Ufuma")
+    c.drawString(18*mm, org_footer_y - 1*mm, "Orumba LGA, Anambra State, Nigeria")
+    
+    # ─── LEOPARD WATERMARK (subtle background) ────────────────────
+    # Add a very subtle leopard print pattern in background
+    c.saveState()
+    c.setFont('Helvetica', 8)
+    c.setFillColor(colors.HexColor('#0D0D18'))
+    for i in range(0, int(width), 30):
+        for j in range(0, int(height), 30):
+            if (i + j) % 60 < 30:
+                c.drawString(i, j, "🐆")
+    c.restoreState()
     
     # ─── SAVE AND RETURN ──────────────────────────────────────────
     c.save()
