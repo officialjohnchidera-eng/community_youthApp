@@ -13,6 +13,7 @@ class Announcement(models.Model):
         ('urgent', 'Urgent'),
         ('event', 'Event'),
         ('payment', 'Payment'),
+        ('meeting', 'Meeting'),
     ]
 
     title = models.CharField(max_length=200)
