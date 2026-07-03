@@ -54,39 +54,36 @@ export default function PaymentsPage() {
   }
 
   const downloadReceipt = (payment) => {
-  const token = localStorage.getItem('access_token')
-  const baseUrl = import.meta.env.VITE_API_URL
-  const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${token}`
-  window.open(url, '_blank')
-}
-  
-  // Create a temporary form to POST with auth header (most mobile-compatible approach)
-  // Actually simpler: open the URL directly with token as query param
-  // We need to add token support to the backend endpoint first
-  
-  // For now, open in new tab - most compatible across all mobile browsers
-  toast.loading('Opening receipt...')
-  
-  // Fetch with auth then create object URL
-  fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  })
-  .then(res => res.blob())
-  .then(blob => {
-    const objectUrl = URL.createObjectURL(blob)
-    toast.dismiss()
-    toast.success('Receipt ready!')
-    // Use location.href instead of window.open - works in PWA mode
-    window.location.href = objectUrl
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 30000)
-  })
-  .catch(() => {
-    toast.dismiss()
-    toast.error('Failed to generate receipt')
-  })
-}
+    const token = localStorage.getItem('access_token')
+    const baseUrl = import.meta.env.VITE_API_URL
+    const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${token}`
+
+    setDownloadingReceipt(payment.id)
+    toast.loading('Opening receipt...')
+
+    fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+      .then(res => res.blob())
+      .then(blob => {
+        const objectUrl = URL.createObjectURL(blob)
+        toast.dismiss()
+        toast.success('Receipt ready!')
+        // Use location.href instead of window.open - works in PWA mode
+        window.location.href = objectUrl
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 30000)
+      })
+      .catch(() => {
+        toast.dismiss()
+        toast.error('Failed to generate receipt')
+      })
+      .finally(() => {
+        setDownloadingReceipt(null)
+      })
+  }
+
   const handleCreatePayment = async (e) => {
     e.preventDefault()
     setCreating(true)
@@ -483,3 +480,4 @@ export default function PaymentsPage() {
       )}
     </DashboardLayout>
   )
+}
