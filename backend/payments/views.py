@@ -601,8 +601,29 @@ def get_payment_request_audit(request, payment_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def download_receipt(request, reference):
+    # Support both JWT header auth AND token query param (for mobile direct URL)
+    user = None
+    
+    # Try header auth first
+    if request.user and request.user.is_authenticated:
+        user = request.user
+    else:
+        # Try token query param
+        token = request.query_params.get('token')
+        if token:
+            try:
+                from rest_framework_simplejwt.tokens import AccessToken
+                from accounts.models import CustomUser
+                access_token = AccessToken(token)
+                user = CustomUser.objects.get(id=access_token['user_id'])
+            except Exception:
+                return Response({'error': 'Invalid token.'}, status=401)
+    
+    if not user:
+        return Response({'error': 'Authentication required.'}, status=401)
+
     try:
         transaction = PaymentTransaction.objects.get(
             paystack_reference=reference,
@@ -611,10 +632,10 @@ def download_receipt(request, reference):
     except PaymentTransaction.DoesNotExist:
         return Response({'error': 'Receipt not found.'}, status=404)
 
-    if transaction.member != request.user and not is_financial_executive(request.user):
+    if transaction.member != user and not is_financial_executive(user):
         return Response({'error': 'Permission denied.'}, status=403)
 
-    from reportlab.pdfgen import canvas
+    # ... rest of the PDF generation code stays exactly the same    from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import mm
