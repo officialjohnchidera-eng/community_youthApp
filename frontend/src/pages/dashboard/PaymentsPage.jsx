@@ -59,6 +59,11 @@ export default function PaymentsPage() {
     const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${token}`
 
     setDownloadingReceipt(payment.id)
+
+    // Open a blank tab synchronously, inside the click handler, so mobile
+    // Safari treats it as a direct user gesture instead of a blocked popup.
+    const newTab = window.open('', '_blank')
+
     toast.loading('Opening receipt...')
 
     fetch(url, {
@@ -66,18 +71,34 @@ export default function PaymentsPage() {
         'Authorization': `Bearer ${token}`
       }
     })
-      .then(res => res.blob())
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch receipt')
+        return res.blob()
+      })
       .then(blob => {
         const objectUrl = URL.createObjectURL(blob)
         toast.dismiss()
         toast.success('Receipt ready!')
-        // Use location.href instead of window.open - works in PWA mode
-        window.location.href = objectUrl
+
+        if (newTab) {
+          // Point the already-open tab at the blob (desktop + most mobile browsers)
+          newTab.location.href = objectUrl
+        } else {
+          // Popup was blocked or unavailable - fall back to a direct download link
+          const a = document.createElement('a')
+          a.href = objectUrl
+          a.download = `receipt-${payment.paystack_reference}.pdf`
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+        }
+
         setTimeout(() => URL.revokeObjectURL(objectUrl), 30000)
       })
       .catch(() => {
         toast.dismiss()
         toast.error('Failed to generate receipt')
+        if (newTab) newTab.close()
       })
       .finally(() => {
         setDownloadingReceipt(null)
