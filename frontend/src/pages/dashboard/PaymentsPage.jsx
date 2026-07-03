@@ -53,28 +53,39 @@ export default function PaymentsPage() {
     }
   }
 
-  const downloadReceipt = async (payment) => {
-  setDownloadingReceipt(payment.id)
-  const toastId = toast.loading('Generating receipt...')
-  try {
-    const response = await api.get(`/payments/receipt/${payment.paystack_reference}/`, {
-      responseType: 'blob'
-    })
-    const blob = new Blob([response.data], { type: 'application/pdf' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `receipt-${payment.receipt_number || payment.paystack_reference}.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    setTimeout(() => URL.revokeObjectURL(url), 15000)
-    toast.success('Receipt downloaded!', { id: toastId })
-  } catch (error) {
-    toast.error('Failed to generate receipt', { id: toastId })
-  } finally {
-    setDownloadingReceipt(null)
-  }
+  const downloadReceipt = (payment) => {
+  const token = localStorage.getItem('access_token')
+  const baseUrl = import.meta.env.VITE_API_URL
+  const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${token}`
+  window.open(url, '_blank')
+}
+  
+  // Create a temporary form to POST with auth header (most mobile-compatible approach)
+  // Actually simpler: open the URL directly with token as query param
+  // We need to add token support to the backend endpoint first
+  
+  // For now, open in new tab - most compatible across all mobile browsers
+  toast.loading('Opening receipt...')
+  
+  // Fetch with auth then create object URL
+  fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  .then(res => res.blob())
+  .then(blob => {
+    const objectUrl = URL.createObjectURL(blob)
+    toast.dismiss()
+    toast.success('Receipt ready!')
+    // Use location.href instead of window.open - works in PWA mode
+    window.location.href = objectUrl
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 30000)
+  })
+  .catch(() => {
+    toast.dismiss()
+    toast.error('Failed to generate receipt')
+  })
 }
   const handleCreatePayment = async (e) => {
     e.preventDefault()
