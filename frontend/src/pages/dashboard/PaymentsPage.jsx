@@ -54,23 +54,11 @@ export default function PaymentsPage() {
   }
 
   const downloadReceipt = (payment) => {
-  const token = localStorage.getItem('access_token')
-  const baseUrl = import.meta.env.VITE_API_URL
-  const encodedToken = encodeURIComponent(token)
-  const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${encodedToken}`
-  
-  // Check if running in PWA standalone mode
-  const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
-                window.navigator.standalone === true
-  
-  if (isPWA) {
-    // In PWA mode, navigate current window (window.open is blocked)
-    window.location.href = url
-  } else {
-    // In browser mode, open in new tab
-    window.open(url, '_blank')
-  }
-}
+    const token = localStorage.getItem('access_token')
+    const baseUrl = import.meta.env.VITE_API_URL
+    const encodedToken = encodeURIComponent(token)
+    const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${encodedToken}`
+
     setDownloadingReceipt(payment.id)
 
     // Detect iOS (Safari on iPhone/iPad or PWA on iOS)
