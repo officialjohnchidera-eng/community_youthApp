@@ -9,11 +9,32 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-comp
 // Workbox for caching
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-sw.js')
 
+// Force this new service worker to activate immediately instead of waiting
+// for every open tab/PWA instance to fully close first. Without this, a
+// phone that keeps the PWA backgrounded (rather than fully killed) can be
+// stuck on an old cached bundle indefinitely, even after new deploys.
+self.addEventListener('install', () => {
+  self.skipWaiting()
+})
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim())
+})
+
 // Precache assets injected by vite-plugin-pwa
 if (workbox) {
   workbox.precaching.precacheAndRoute(self.__WB_MANIFEST || [])
 
-  // Cache API calls with NetworkFirst strategy
+  // Receipt PDFs: always go straight to network, never cached, never
+  // touched by NetworkFirst. Registered BEFORE the general API route
+  // below, since Workbox uses the first route that matches a request.
+  workbox.routing.registerRoute(
+    ({ url }) =>
+      url.origin === 'https://communityyouthapp-production.up.railway.app' &&
+      url.pathname.startsWith('/api/payments/receipt/'),
+    new workbox.strategies.NetworkOnly()
+  )
+
+  // Cache other API calls with NetworkFirst strategy
   workbox.routing.registerRoute(
     ({ url }) => url.origin === 'https://communityyouthapp-production.up.railway.app',
     new workbox.strategies.NetworkFirst({
