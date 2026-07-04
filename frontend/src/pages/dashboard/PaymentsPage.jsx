@@ -26,7 +26,15 @@ export default function PaymentsPage() {
   const [reactivating, setReactivating] = useState(false)
   const [downloadingReceipt, setDownloadingReceipt] = useState(null)
   const [user, setUser] = useState(null)
+  const [debugLog, setDebugLog] = useState([])
+  const [showDebug, setShowDebug] = useState(false)
   const navigate = useNavigate()
+
+  const log = (msg) => {
+    const line = `${new Date().toLocaleTimeString()} — ${msg}`
+    console.log(line)
+    setDebugLog((prev) => [...prev.slice(-19), line])
+  }
 
   useEffect(() => {
     fetchData()
@@ -54,23 +62,35 @@ export default function PaymentsPage() {
   }
 
   const downloadReceipt = (payment) => {
-    const token = localStorage.getItem('access_token')
-    const baseUrl = import.meta.env.VITE_API_URL
-    const encodedToken = encodeURIComponent(token)
-    const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${encodedToken}`
+    setShowDebug(true)
+    log(`Click received for payment id=${payment.id}, ref=${payment.paystack_reference}`)
+
+    let token, baseUrl, url
+    try {
+      token = localStorage.getItem('access_token')
+      log(`Token present: ${!!token} (length ${token ? token.length : 0})`)
+      baseUrl = import.meta.env.VITE_API_URL
+      log(`Base URL: ${baseUrl}`)
+      const encodedToken = encodeURIComponent(token)
+      url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${encodedToken}`
+      log(`Built URL (truncated): ${url.slice(0, 60)}...`)
+    } catch (err) {
+      log(`ERROR building URL: ${err.message}`)
+      toast.error('Debug: URL build failed, see log')
+      return
+    }
 
     setDownloadingReceipt(payment.id)
 
-    // Detect iOS (Safari on iPhone/iPad or PWA on iOS)
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 
-    // Detect Android
     const isAndroid = /android/i.test(navigator.userAgent)
 
-    // Detect PWA (standalone mode)
     const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
       window.navigator.standalone === true
+
+    log(`isIOS=${isIOS} isAndroid=${isAndroid} isPWA=${isPWA} UA=${navigator.userAgent}`)
 
     if (isIOS) {
       // iOS Safari and iOS PWA: blob URLs don't open PDFs.
@@ -88,19 +108,18 @@ export default function PaymentsPage() {
     }
 
     if (isPWA && isAndroid) {
-      // Android PWA: window.open and target="_blank" are blocked inside the
-      // standalone WebView, and the `download` attribute is ignored for
-      // cross-origin URLs (frontend on Vercel, API on Railway). So fetch the
-      // PDF as a blob first — blob: URLs are same-origin — then download that.
+      log('Entered Android PWA branch, starting fetch...')
       toast.loading('Downloading receipt...')
       fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => {
-          if (!res.ok) throw new Error('Failed to fetch receipt')
+          log(`Fetch responded: status=${res.status} ok=${res.ok}`)
+          if (!res.ok) throw new Error(`Server returned ${res.status}`)
           return res.blob()
         })
         .then(blob => {
+          log(`Got blob: size=${blob.size} type=${blob.type}`)
           const objectUrl = URL.createObjectURL(blob)
           const a = document.createElement('a')
           a.href = objectUrl
@@ -108,13 +127,15 @@ export default function PaymentsPage() {
           document.body.appendChild(a)
           a.click()
           document.body.removeChild(a)
+          log('Anchor click dispatched for blob download')
           toast.dismiss()
           toast.success('Receipt downloaded!')
           setTimeout(() => URL.revokeObjectURL(objectUrl), 30000)
         })
-        .catch(() => {
+        .catch((err) => {
+          log(`FETCH/BLOB ERROR: ${err.message || err}`)
           toast.dismiss()
-          toast.error('Failed to generate receipt')
+          toast.error('Failed to generate receipt — check debug log')
         })
         .finally(() => {
           setDownloadingReceipt(null)
@@ -293,6 +314,19 @@ export default function PaymentsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-4">
+
+        {/* TEMP DEBUG PANEL — remove once download issue is fixed */}
+        <button
+          onClick={() => setShowDebug(!showDebug)}
+          className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-lg"
+        >
+          {showDebug ? 'Hide' : 'Show'} Debug Log
+        </button>
+        {showDebug && (
+          <div className="bg-black text-green-400 text-[10px] font-mono p-3 rounded-xl max-h-60 overflow-y-auto whitespace-pre-wrap break-all">
+            {debugLog.length === 0 ? 'No log entries yet. Tap the download button on a paid transaction.' : debugLog.join('\n')}
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex flex-col gap-3">
