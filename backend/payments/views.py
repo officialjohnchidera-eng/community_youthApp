@@ -603,16 +603,18 @@ def download_receipt(request, reference):
         user = request.user
     else:
         token = request.query_params.get('token')
-        if token:
-            try:
-                from rest_framework_simplejwt.tokens import AccessToken
-                from accounts.models import CustomUser
-                access_token = AccessToken(token)
-                user = CustomUser.objects.get(id=access_token['user_id'])
-            except Exception as e:
-                print(f"Token error: {e}")
-                return Response({'error': 'Invalid token.'}, status=401)
-
+if token:
+    try:
+        from rest_framework_simplejwt.tokens import AccessToken
+        from rest_framework_simplejwt.exceptions import TokenError
+        from accounts.models import CustomUser
+        import urllib.parse
+        decoded_token = urllib.parse.unquote(token)
+        access_token = AccessToken(decoded_token)
+        user = CustomUser.objects.get(id=access_token['user_id'])
+    except Exception as e:
+        print(f"Token error: {e}")
+        return Response({'error': 'Invalid token.'}, status=401)
     if not user:
         return Response({'error': 'Authentication required.'}, status=401)
 
