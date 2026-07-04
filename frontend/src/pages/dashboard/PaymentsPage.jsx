@@ -58,7 +58,18 @@ export default function PaymentsPage() {
   const baseUrl = import.meta.env.VITE_API_URL
   const encodedToken = encodeURIComponent(token)
   const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${encodedToken}`
-  window.open(url, '_blank')
+  
+  // Check if running in PWA standalone mode
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                window.navigator.standalone === true
+  
+  if (isPWA) {
+    // In PWA mode, navigate current window (window.open is blocked)
+    window.location.href = url
+  } else {
+    // In browser mode, open in new tab
+    window.open(url, '_blank')
+  }
 }
     setDownloadingReceipt(payment.id)
 
