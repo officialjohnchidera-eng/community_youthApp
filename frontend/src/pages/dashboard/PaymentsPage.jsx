@@ -88,22 +88,37 @@ export default function PaymentsPage() {
     }
 
     if (isPWA && isAndroid) {
-      // Android PWA: window.open is often blocked inside standalone WebView.
-      // Use an anchor tag with download attribute instead.
+      // Android PWA: window.open and target="_blank" are blocked inside the
+      // standalone WebView, and the `download` attribute is ignored for
+      // cross-origin URLs (frontend on Vercel, API on Railway). So fetch the
+      // PDF as a blob first — blob: URLs are same-origin — then download that.
       toast.loading('Downloading receipt...')
-      const a = document.createElement('a')
-      a.href = url
-      a.target = '_blank'
-      a.rel = 'noopener noreferrer'
-      a.download = `receipt-${payment.paystack_reference}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => {
-        toast.dismiss()
-        toast.success('Receipt downloading!')
-        setDownloadingReceipt(null)
-      }, 1000)
+      fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to fetch receipt')
+          return res.blob()
+        })
+        .then(blob => {
+          const objectUrl = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = objectUrl
+          a.download = `receipt-${payment.paystack_reference}.pdf`
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          toast.dismiss()
+          toast.success('Receipt downloaded!')
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 30000)
+        })
+        .catch(() => {
+          toast.dismiss()
+          toast.error('Failed to generate receipt')
+        })
+        .finally(() => {
+          setDownloadingReceipt(null)
+        })
       return
     }
 
