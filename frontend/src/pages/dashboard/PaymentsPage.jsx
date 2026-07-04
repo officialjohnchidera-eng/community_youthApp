@@ -54,10 +54,12 @@ export default function PaymentsPage() {
   }
 
   const downloadReceipt = (payment) => {
-    const token = localStorage.getItem('access_token')
-    const baseUrl = import.meta.env.VITE_API_URL
-    const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${token}`
-
+  const token = localStorage.getItem('access_token')
+  const baseUrl = import.meta.env.VITE_API_URL
+  const encodedToken = encodeURIComponent(token)
+  const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${encodedToken}`
+  window.open(url, '_blank')
+}
     setDownloadingReceipt(payment.id)
 
     // Detect iOS (Safari on iPhone/iPad or PWA on iOS)
