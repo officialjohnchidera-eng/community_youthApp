@@ -29,6 +29,7 @@ const getNavItems = (user) => {
     { path: '/dashboard/welfare', icon: <FaHeart />, label: 'Welfare' },
     { path: '/dashboard/members', icon: <FaUsers />, label: 'Members' },
     { path: '/dashboard/profile', icon: <FaUser />, label: 'My Profile' }
+    { path: '/dashboard/verify-receipt', icon: <FaReceipt />, label: 'Verify Receipt' },
   ]
 
   const executiveItems = [

@@ -1,7 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
-
+import ReceiptVerificationPage from './pages/dashboard/ReceiptVerificationPage'
 import ProfilePage from './pages/dashboard/ProfilePage'
+
 
 // Public Pages
 import LandingPage from './pages/LandingPage'
@@ -110,6 +111,7 @@ export default function App() {
       <Route path="/dashboard/members" element={<ApprovedRoute><MembersPage /></ApprovedRoute>} />
       <Route path="/dashboard/documents" element={<ApprovedRoute><DocumentsPage /></ApprovedRoute>} />
       <Route path="/dashboard/disciplinary" element={<ExecRoute><DisciplinaryPage /></ExecRoute>} />
+      <Route path="/dashboard/verify-receipt" element={<ApprovedRoute><ReceiptVerificationPage /></ApprovedRoute>} />
       <Route path="/dashboard/reports" element={<ExecRoute><ReportsPage /></ExecRoute>} />
       <Route path="/dashboard/notifications" element={<ApprovedRoute><NotificationsPage /></ApprovedRoute>} />
       <Route path="/dashboard/approvals" element={<PresidentRoute><ApprovalsPage /></PresidentRoute>} />
