@@ -10,7 +10,8 @@ import {
   FaHome, FaMoneyBillWave, FaCalendarAlt, FaBullhorn,
   FaUsers, FaPhotoVideo, FaHeart, FaGavel, FaPoll,
   FaFileAlt, FaBell, FaSignOutAlt, FaBars, FaTimes,
-  FaUserCheck, FaChartBar, FaCalendar, FaMoneyBill, FaUser
+  FaUserCheck, FaChartBar, FaCalendar, FaMoneyBill, FaUser,
+  FaReceipt // <-- Added this import
 } from 'react-icons/fa'
 
 const getNavItems = (user) => {
@@ -28,8 +29,8 @@ const getNavItems = (user) => {
     { path: '/dashboard/media', icon: <FaPhotoVideo />, label: 'Media Gallery' },
     { path: '/dashboard/welfare', icon: <FaHeart />, label: 'Welfare' },
     { path: '/dashboard/members', icon: <FaUsers />, label: 'Members' },
-    { path: '/dashboard/profile', icon: <FaUser />, label: 'My Profile' }
-    { path: '/dashboard/verify-receipt', icon: <FaReceipt />, label: 'Verify Receipt' },
+    { path: '/dashboard/profile', icon: <FaUser />, label: 'My Profile' },
+    { path: '/dashboard/verify-receipt', icon: <FaReceipt />, label: 'Verify Receipt' } // <-- Added comma before this line
   ]
 
   const executiveItems = [
@@ -73,20 +74,20 @@ export default function DashboardLayout({ children }) {
   const navItems = getNavItems(user)
 
   useEffect(() => {
-  fetchNotifications()
-  // Poll for new notifications every 30 seconds
-  const interval = setInterval(fetchNotifications, 30000)
-
-  // Listen for foreground push notifications
-  onForegroundMessage((payload) => {
-    toast.success(payload.notification?.title || 'New notification', {
-      duration: 5000,
-    })
     fetchNotifications()
-  })
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000)
 
-  return () => clearInterval(interval)
-}, [])
+    // Listen for foreground push notifications
+    onForegroundMessage((payload) => {
+      toast.success(payload.notification?.title || 'New notification', {
+        duration: 5000,
+      })
+      fetchNotifications()
+    })
+
+    return () => clearInterval(interval)
+  }, [])
 
   const fetchNotifications = async () => {
     try {
