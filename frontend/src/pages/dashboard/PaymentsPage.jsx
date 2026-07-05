@@ -257,36 +257,66 @@ export default function PaymentsPage() {
   }
 
   const TransactionCard = ({ payment, borderColor = "border-gray-700" }) => (
-    <div className={`bg-gray-900 rounded-xl p-3 border ${borderColor}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-2 min-w-0">
+  <div className={`bg-gray-900 rounded-xl p-3 border ${borderColor} w-full overflow-hidden`}>
+    <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start gap-2 min-w-0 flex-1">
+        <div className="mt-0.5 flex-shrink-0">
           {statusIcon(payment.status)}
-          <div className="min-w-0">
-            <p className="text-white font-medium text-xs truncate">{payment.payment_request?.title || payment.paystack_reference}</p>
-            <p className="text-gray-400 text-xs mt-0.5 truncate">{payment.paystack_reference}</p>
-            <p className="text-gray-500 text-xs">{new Date(payment.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
-          </div>
         </div>
-        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          <p className="text-white font-semibold text-xs">NGN {parseFloat(payment.amount).toLocaleString()}</p>
-          <span className={"text-xs px-2 py-0.5 rounded-full border " + statusColor(payment.status)}>{payment.status}</span>
-          {payment.status === "success" && (
-            <button
-              onClick={() => downloadReceipt(payment)}
-              disabled={downloadingReceipt === payment.id}
-              className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 p-1.5 rounded-lg transition-all disabled:opacity-50"
-            >
-              {downloadingReceipt === payment.id ? (
-                <div className="w-2.5 h-2.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <FaDownload size={10} />
-              )}
-            </button>
+        <div className="min-w-0 flex-1">
+          {/* Payment title */}
+          <p className="text-white font-semibold text-xs truncate">
+            {payment.payment_request?.title || 'Payment'}
+          </p>
+          {/* Payment type badge */}
+          {payment.payment_request?.payment_type && (
+            <span className="text-xs text-emerald-400 font-medium">
+              {payment.payment_request.payment_type.replace(/_/g, ' ').toUpperCase()}
+            </span>
           )}
+          {/* Village */}
+          {payment.village && (
+            <p className="text-gray-500 text-xs mt-0.5 truncate">📍 {payment.village}</p>
+          )}
+          {/* Dates */}
+          <div className="mt-1 space-y-0.5">
+            <p className="text-gray-500 text-xs">
+              Initiated: {new Date(payment.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            </p>
+            {payment.paid_at && (
+              <p className="text-emerald-400 text-xs">
+                ✓ Paid: {new Date(payment.paid_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              </p>
+            )}
+          </div>
+          {/* Reference */}
+          <p className="text-gray-600 text-xs mt-0.5 truncate">Ref: {payment.paystack_reference}</p>
         </div>
       </div>
+      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+        <p className={`font-bold text-sm ${payment.status === 'success' ? 'text-emerald-400' : payment.status === 'pending' ? 'text-yellow-400' : 'text-red-400'}`}>
+          NGN {parseFloat(payment.amount).toLocaleString()}
+        </p>
+        <span className={"text-xs px-2 py-0.5 rounded-full border " + statusColor(payment.status)}>
+          {payment.status}
+        </span>
+        {payment.status === "success" && (
+          <button
+            onClick={() => downloadReceipt(payment)}
+            disabled={downloadingReceipt === payment.id}
+            className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 p-1.5 rounded-lg transition-all disabled:opacity-50 mt-1"
+          >
+            {downloadingReceipt === payment.id ? (
+              <div className="w-2.5 h-2.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <FaDownload size={10} />
+            )}
+          </button>
+        )}
+      </div>
     </div>
-  )
+  </div>
+)
 
   return (
     <DashboardLayout>
