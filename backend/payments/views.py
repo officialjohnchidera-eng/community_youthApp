@@ -1003,3 +1003,30 @@ def download_receipt(request, reference):
         import traceback
         traceback.print_exc()
         return Response({'error': f'Failed to generate receipt: {str(e)}'}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def verify_receipt(request, receipt_number):
+    try:
+        transaction = PaymentTransaction.objects.select_related(
+            'payment_request', 'member', 'village'
+        ).get(receipt_number=receipt_number, status='success')
+    except PaymentTransaction.DoesNotExist:
+        return Response({
+            'valid': False,
+            'message': 'Receipt not found or payment was not successful.'
+        }, status=404)
+
+    return Response({
+        'valid': True,
+        'receipt_number': transaction.receipt_number,
+        'member': str(transaction.member) if transaction.member else 'N/A',
+        'member_id': transaction.member.user_id if transaction.member else 'N/A',
+        'payment_for': transaction.payment_request.title,
+        'payment_type': transaction.payment_request.payment_type.replace('_', ' ').title(),
+        'amount': str(transaction.amount),
+        'village': str(transaction.village) if transaction.village else 'N/A',
+        'paid_at': transaction.paid_at,
+        'paystack_reference': transaction.paystack_reference,
+    })
