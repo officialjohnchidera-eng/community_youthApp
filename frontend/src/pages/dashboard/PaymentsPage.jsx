@@ -53,112 +53,50 @@ export default function PaymentsPage() {
     }
   }
 
-  const downloadReceipt = (payment) => {
-    const token = localStorage.getItem('access_token')
-    const baseUrl = import.meta.env.VITE_API_URL
-    const encodedToken = encodeURIComponent(token)
-    const url = `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${encodedToken}`
-
+  const downloadReceipt = async (payment) => {
     setDownloadingReceipt(payment.id)
+    const toastId = toast.loading('Generating receipt...')
+    try {
+      const token = localStorage.getItem('access_token')
+      const baseUrl = import.meta.env.VITE_API_URL
+      const response = await fetch(
+        `${baseUrl}/payments/receipt/${payment.paystack_reference}/?token=${encodeURIComponent(token)}`
+      )
+      if (!response.ok) throw new Error('Failed')
+      const blob = await response.blob()
 
-    // Detect iOS (Safari on iPhone/iPad or PWA on iOS)
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-
-    // Detect Android
-    const isAndroid = /android/i.test(navigator.userAgent)
-
-    // Detect PWA (standalone mode)
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
-      window.navigator.standalone === true
-
-    if (isIOS) {
-      // iOS Safari and iOS PWA: blob URLs don't open PDFs.
-      // Navigate the current window directly to the receipt URL.
-      // Backend returns inline PDF so Safari renders it natively
-      // with its own share/save sheet. Back button returns to app.
-      toast.loading('Opening receipt...')
-      setTimeout(() => {
-        toast.dismiss()
-        toast.success('Receipt opened!')
-        window.location.href = url
-        setDownloadingReceipt(null)
-      }, 300)
-      return
-    }
-
-    if (isPWA && isAndroid) {
-      // Android PWA: window.open and target="_blank" are blocked inside the
-      // standalone WebView, and the `download` attribute is ignored for
-      // cross-origin URLs (frontend on Vercel, API on Railway). So fetch the
-      // PDF as a blob first — blob: URLs are same-origin — then download that.
-      toast.loading('Downloading receipt...')
-      fetch(url)
-        .then(res => {
-          if (!res.ok) throw new Error('Failed to fetch receipt')
-          return res.blob()
-        })
-        .then(blob => {
-          const objectUrl = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = objectUrl
-          a.download = `receipt-${payment.paystack_reference}.pdf`
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
-          toast.dismiss()
-          toast.success('Receipt downloaded! Check your Downloads folder.')
-          setTimeout(() => URL.revokeObjectURL(objectUrl), 30000)
-        })
-        .catch(() => {
-          toast.dismiss()
-          toast.error('Failed to generate receipt')
-        })
-        .finally(() => {
-          setDownloadingReceipt(null)
-        })
-      return
-    }
-
-    // Desktop and non-PWA mobile browsers:
-    // Fetch as blob and open in a new tab.
-    const newTab = window.open('', '_blank')
-    toast.loading('Opening receipt...')
-
-    fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch receipt')
-        return res.blob()
-      })
-      .then(blob => {
-        const objectUrl = URL.createObjectURL(blob)
-        toast.dismiss()
-        toast.success('Receipt ready!')
-
-        if (newTab) {
-          newTab.location.href = objectUrl
-        } else {
-          // Popup was blocked — fall back to anchor download
-          const a = document.createElement('a')
-          a.href = objectUrl
-          a.download = `receipt-${payment.paystack_reference}.pdf`
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
+      // Try Web Share API first (best for Android PWA)
+      if (navigator.canShare && navigator.share) {
+        try {
+          const file = new File([blob], `receipt-${payment.receipt_number || payment.paystack_reference}.pdf`, { type: 'application/pdf' })
+          if (navigator.canShare({ files: [file] })) {
+            toast.dismiss(toastId)
+            setDownloadingReceipt(null)
+            await navigator.share({
+              files: [file],
+              title: 'Payment Receipt',
+              text: 'Umuagu Youth Association Payment Receipt'
+            })
+            toast.success('Receipt shared!')
+            return
+          }
+        } catch (shareError) {
+          console.log('Share failed, trying fallback:', shareError)
         }
+      }
 
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 30000)
-      })
-      .catch(() => {
-        toast.dismiss()
-        toast.error('Failed to generate receipt')
-        if (newTab) newTab.close()
-      })
-      .finally(() => {
-        setDownloadingReceipt(null)
-      })
+      // Fallback: open blob URL directly
+      const url = URL.createObjectURL(blob)
+      window.location.href = url
+      setTimeout(() => URL.revokeObjectURL(url), 30000)
+      toast.success('Receipt opened!', { id: toastId })
+
+    } catch (error) {
+      console.log('Receipt error:', error)
+      toast.error('Failed to generate receipt', { id: toastId })
+    } finally {
+      setDownloadingReceipt(null)
+    }
   }
 
   const handleCreatePayment = async (e) => {
@@ -257,66 +195,61 @@ export default function PaymentsPage() {
   }
 
   const TransactionCard = ({ payment, borderColor = "border-gray-700" }) => (
-  <div className={`bg-gray-900 rounded-xl p-3 border ${borderColor} w-full overflow-hidden`}>
-    <div className="flex items-start justify-between gap-2">
-      <div className="flex items-start gap-2 min-w-0 flex-1">
-        <div className="mt-0.5 flex-shrink-0">
-          {statusIcon(payment.status)}
-        </div>
-        <div className="min-w-0 flex-1">
-          {/* Payment title */}
-          <p className="text-white font-semibold text-xs truncate">
-            {payment.payment_request?.title || 'Payment'}
-          </p>
-          {/* Payment type badge */}
-          {payment.payment_request?.payment_type && (
-            <span className="text-xs text-emerald-400 font-medium">
-              {payment.payment_request.payment_type.replace(/_/g, ' ').toUpperCase()}
-            </span>
-          )}
-          {/* Village */}
-          {payment.village && (
-            <p className="text-gray-500 text-xs mt-0.5 truncate">📍 {payment.village}</p>
-          )}
-          {/* Dates */}
-          <div className="mt-1 space-y-0.5">
-            <p className="text-gray-500 text-xs">
-              Initiated: {new Date(payment.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-            </p>
-            {payment.paid_at && (
-              <p className="text-emerald-400 text-xs">
-                ✓ Paid: {new Date(payment.paid_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-              </p>
-            )}
+    <div className={`bg-gray-900 rounded-xl p-3 border ${borderColor} w-full overflow-hidden`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          <div className="mt-0.5 flex-shrink-0">
+            {statusIcon(payment.status)}
           </div>
-          {/* Reference */}
-          <p className="text-gray-600 text-xs mt-0.5 truncate">Ref: {payment.paystack_reference}</p>
-        </div>
-      </div>
-      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-        <p className={`font-bold text-sm ${payment.status === 'success' ? 'text-emerald-400' : payment.status === 'pending' ? 'text-yellow-400' : 'text-red-400'}`}>
-          NGN {parseFloat(payment.amount).toLocaleString()}
-        </p>
-        <span className={"text-xs px-2 py-0.5 rounded-full border " + statusColor(payment.status)}>
-          {payment.status}
-        </span>
-        {payment.status === "success" && (
-          <button
-            onClick={() => downloadReceipt(payment)}
-            disabled={downloadingReceipt === payment.id}
-            className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 p-1.5 rounded-lg transition-all disabled:opacity-50 mt-1"
-          >
-            {downloadingReceipt === payment.id ? (
-              <div className="w-2.5 h-2.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <FaDownload size={10} />
+          <div className="min-w-0 flex-1">
+            <p className="text-white font-semibold text-xs truncate">
+              {payment.payment_request?.title || 'Payment'}
+            </p>
+            {payment.payment_request?.payment_type && (
+              <span className="text-xs text-emerald-400 font-medium">
+                {payment.payment_request.payment_type.replace(/_/g, ' ').toUpperCase()}
+              </span>
             )}
-          </button>
-        )}
+            {payment.village && (
+              <p className="text-gray-500 text-xs mt-0.5 truncate">📍 {payment.village}</p>
+            )}
+            <div className="mt-1 space-y-0.5">
+              <p className="text-gray-500 text-xs">
+                Initiated: {new Date(payment.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              </p>
+              {payment.paid_at && (
+                <p className="text-emerald-400 text-xs">
+                  ✓ Paid: {new Date(payment.paid_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                </p>
+              )}
+            </div>
+            <p className="text-gray-600 text-xs mt-0.5 truncate">Ref: {payment.paystack_reference}</p>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          <p className={`font-bold text-sm ${payment.status === 'success' ? 'text-emerald-400' : payment.status === 'pending' ? 'text-yellow-400' : 'text-red-400'}`}>
+            NGN {parseFloat(payment.amount).toLocaleString()}
+          </p>
+          <span className={"text-xs px-2 py-0.5 rounded-full border " + statusColor(payment.status)}>
+            {payment.status}
+          </span>
+          {payment.status === "success" && (
+            <button
+              onClick={() => downloadReceipt(payment)}
+              disabled={downloadingReceipt === payment.id}
+              className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 p-1.5 rounded-lg transition-all disabled:opacity-50 mt-1"
+            >
+              {downloadingReceipt === payment.id ? (
+                <div className="w-2.5 h-2.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <FaDownload size={10} />
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-)
+  )
 
   return (
     <DashboardLayout>
@@ -413,14 +346,15 @@ export default function PaymentsPage() {
         ))}
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-gray-800 border border-gray-700 rounded-xl p-1">
+        <div className="flex gap-1 bg-gray-800 border border-gray-700 rounded-xl p-1 overflow-x-auto">
           {[
             { key: "overview", label: "All (" + payments.length + ")" },
             { key: "paid", label: "Paid (" + successfulPayments.length + ")" },
             { key: "pending", label: "Pending (" + pendingPayments.length + ")" },
             { key: "failed", label: "Failed (" + failedPayments.length + ")" },
+            ...(isFinancialExec ? [{ key: "requests", label: "Requests" }] : []),
           ].map((tab) => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={"flex-1 py-1.5 px-1 rounded-lg text-xs font-medium transition-all " + (activeTab === tab.key ? "bg-emerald-500 text-white shadow-lg" : "text-gray-400 hover:text-white")}>
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={"flex-shrink-0 py-1.5 px-2 rounded-lg text-xs font-medium transition-all " + (activeTab === tab.key ? "bg-emerald-500 text-white shadow-lg" : "text-gray-400 hover:text-white")}>
               {tab.label}
             </button>
           ))}
@@ -434,6 +368,7 @@ export default function PaymentsPage() {
             </div>
           ) : (
             <div className="space-y-3">
+
               {activeTab === "overview" && (
                 payments.length > 0
                   ? payments.map((payment, i) => <TransactionCard key={i} payment={payment} />)
@@ -465,7 +400,7 @@ export default function PaymentsPage() {
                 failedPayments.length > 0
                   ? <>
                       <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-3 mb-2">
-                        <p className="text-gray-400 text-xs">Failed transactions are payment attempts that did not go through. No money was charged for these.</p>
+                        <p className="text-gray-400 text-xs">ℹ️ Failed transactions are payment attempts that didn't go through. No money was charged for these.</p>
                       </div>
                       {failedPayments.map((payment, i) => <TransactionCard key={i} payment={payment} borderColor="border-red-500/20" />)}
                     </>
@@ -474,6 +409,86 @@ export default function PaymentsPage() {
                       <p className="text-gray-400 font-medium text-sm">No failed transactions</p>
                     </div>
               )}
+
+              {activeTab === "requests" && isFinancialExec && (
+                <div className="space-y-2">
+                  <p className="text-gray-400 text-xs mb-2">All payment requests — tap Audit to view compliance</p>
+
+                  {/* Active Requests */}
+                  {requests.length > 0 && (
+                    <>
+                      <p className="text-emerald-400 text-xs font-medium">Active</p>
+                      {requests.map((req, i) => (
+                        <div key={i} className="bg-gray-900 rounded-xl p-3 border border-emerald-500/20">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-white font-medium text-xs truncate">{req.title}</p>
+                              <p className="text-gray-400 text-xs mt-0.5">
+                                NGN {parseFloat(req.amount).toLocaleString()} · {req.payment_type.replace(/_/g, ' ').toUpperCase()}
+                              </p>
+                              {req.deadline && (
+                                <p className="text-gray-500 text-xs">
+                                  Due: {new Date(req.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-1 flex-shrink-0 items-end">
+                              <span className="text-xs px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/30">active</span>
+                              <button
+                                onClick={() => navigate(`/dashboard/payments/${req.id}/audit`)}
+                                className="bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs px-3 py-1 rounded-lg transition-all"
+                              >
+                                Audit
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Closed Requests */}
+                  {closedRequests.length > 0 && (
+                    <>
+                      <p className="text-gray-400 text-xs font-medium mt-3">Closed</p>
+                      {closedRequests.map((req, i) => (
+                        <div key={i} className="bg-gray-900 rounded-xl p-3 border border-gray-700">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-white font-medium text-xs truncate">{req.title}</p>
+                              <p className="text-gray-400 text-xs mt-0.5">
+                                NGN {parseFloat(req.amount).toLocaleString()} · {req.payment_type.replace(/_/g, ' ').toUpperCase()}
+                              </p>
+                              {req.deadline && (
+                                <p className="text-gray-500 text-xs">
+                                  Closed: {new Date(req.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-1 flex-shrink-0 items-end">
+                              <span className="text-xs px-2 py-0.5 rounded-full border bg-gray-500/10 text-gray-400 border-gray-500/30">closed</span>
+                              <button
+                                onClick={() => navigate(`/dashboard/payments/${req.id}/audit`)}
+                                className="bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs px-3 py-1 rounded-lg transition-all"
+                              >
+                                Audit
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {requests.length === 0 && closedRequests.length === 0 && (
+                    <div className="text-center py-8">
+                      <FaReceipt className="text-gray-600 mx-auto mb-3" size={32} />
+                      <p className="text-gray-500 text-sm">No payment requests yet</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
             </div>
           )}
         </motion.div>
@@ -504,7 +519,7 @@ export default function PaymentsPage() {
                 </select>
               </div>
               <div className="bg-gray-900 border border-gray-700 rounded-xl p-3">
-                <p className="text-gray-400 text-xs">Once you click Pay Now you will be redirected to Paystack to complete your payment securely.</p>
+                <p className="text-gray-400 text-xs">💡 Once you click Pay Now you will be redirected to Paystack to complete your payment securely.</p>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl transition-all">Cancel</button>
@@ -575,7 +590,7 @@ export default function PaymentsPage() {
                 <input type="datetime-local" value={reactivateDeadline} onChange={(e) => setReactivateDeadline(e.target.value)} required className="w-full bg-gray-900 border border-gray-700 text-white rounded-xl py-3 px-4 focus:outline-none focus:border-emerald-500" />
               </div>
               <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3">
-                <p className="text-orange-400 text-xs">Only members who have NOT paid will see this reactivated request. Members who already paid will not be affected.</p>
+                <p className="text-orange-400 text-xs">⚠️ Only members who have NOT paid will see this reactivated request. Members who already paid will not be affected.</p>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowReactivateModal(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl transition-all">Cancel</button>
@@ -585,6 +600,7 @@ export default function PaymentsPage() {
           </motion.div>
         </div>
       )}
+
     </DashboardLayout>
   )
 }
