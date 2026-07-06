@@ -6,6 +6,17 @@ import { AuthProvider } from './context/AuthContext'
 import './index.css'
 import App from './App.jsx'
 
+// Listen for messages from the service worker (e.g. when a push
+// notification is tapped) and navigate accordingly. This lives outside
+// the JSX tree since it's a plain side-effect, not part of the render.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'NAVIGATE' && event.data.url) {
+      window.location.href = event.data.url
+    }
+  })
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
