@@ -106,27 +106,17 @@ Umuagu General Youth Association
             try:
                 from notifications.firebase import send_bulk_notification
                 from notifications.models import DeviceToken
-                device_tokens_qs = DeviceToken.objects.filter(
-                    member__account_status='approved'
+                all_tokens = list(
+                    DeviceToken.objects.filter(
+                        member__account_status='approved'
+                    ).values_list('token', flat=True)
                 )
-                all_tokens = list(device_tokens_qs.values_list('token', flat=True))
                 if all_tokens:
-                    result = send_bulk_notification(
+                    send_bulk_notification(
                         tokens=all_tokens,
                         title=f'New Payment: {payment_request.title}',
                         body=f'NGN {payment_request.amount:,.2f} due. Login to pay now.',
                     )
-                    print(f"[PUSH] Sent to {len(all_tokens)} tokens. Result: {result}")
-
-                    # Log per-token failures so we can see WHY specific devices
-                    # failed (expired token, unregistered, sender-id mismatch, etc.)
-                    if result.get('success') and result.get('failure_count', 0) > 0:
-                        print(f"[PUSH] {result['failure_count']} of {len(all_tokens)} deliveries failed. "
-                              f"Success: {result.get('success_count')}, Failure: {result.get('failure_count')}")
-                    elif not result.get('success'):
-                        print(f"[PUSH] Bulk send failed entirely: {result.get('error')}")
-                else:
-                    print("[PUSH] No device tokens found for approved members — nothing to send.")
             except Exception as e:
                 print(f"Push notification error: {e}")
 
