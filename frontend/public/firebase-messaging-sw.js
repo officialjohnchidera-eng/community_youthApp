@@ -59,18 +59,25 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging()
 
-// Handle background push notifications
+// Handle background push notifications.
+// IMPORTANT: the backend now sends DATA-ONLY messages (no 'notification'
+// field), specifically so this handler is guaranteed to run every time
+// instead of relying on Firebase's built-in auto-display behavior, which
+// proved unreliable (FCM confirmed delivery but nothing ever appeared on
+// the device). Because of that, title/body now come from payload.data
+// instead of payload.notification.
 messaging.onBackgroundMessage((payload) => {
   console.log('Background message received:', payload)
 
-  const notificationTitle = payload.notification?.title || 'Umuagu Youth'
+  const data = payload.data || {}
+  const notificationTitle = data.title || 'Umuagu Youth'
   const notificationOptions = {
-    body: payload.notification?.body || '',
+    body: data.body || '',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     vibrate: [200, 100, 200],
-    tag: payload.data?.type || 'general',
-    data: payload.data || {},
+    tag: data.type || 'general',
+    data: data,
     actions: [
       { action: 'open', title: 'Open App' },
       { action: 'close', title: 'Dismiss' }

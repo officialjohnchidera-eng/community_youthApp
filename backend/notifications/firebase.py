@@ -34,7 +34,6 @@ def initialize_firebase():
             )
         cred = credentials.Certificate(cred_dict)
     else:
-        # Local dev fallback: read from a file on disk
         cred_path = os.path.join(settings.BASE_DIR, settings.FIREBASE_CREDENTIALS)
         if not os.path.exists(cred_path):
             raise RuntimeError(
@@ -49,17 +48,31 @@ def initialize_firebase():
 
 # =============================================================
 # SEND NOTIFICATION TO SINGLE DEVICE
-# Sends a push notification to a specific device token
+#
+# IMPORTANT: sent as a DATA-ONLY message (no 'notification' field).
+# Web push has an ambiguous, SDK-version-dependent auto-display
+# behavior when a 'notification' payload is present: Firebase may
+# try to display it automatically WITHOUT invoking our own
+# onBackgroundMessage() handler in the service worker, and that
+# automatic path silently failed in testing (FCM reported successful
+# delivery, but no notification ever appeared on the device).
+#
+# Sending data-only reliably forces onBackgroundMessage() in
+# firebase-messaging-sw.js to run every time, giving us full control
+# and a guaranteed call to self.registration.showNotification().
 # =============================================================
 def send_push_notification(token, title, body, data=None):
     initialize_firebase()
     try:
+        payload_data = {
+            'title': title,
+            'body': body,
+        }
+        if data:
+            payload_data.update({k: str(v) for k, v in data.items()})
+
         message = messaging.Message(
-            notification=messaging.Notification(
-                title=title,
-                body=body
-            ),
-            data=data or {},
+            data=payload_data,
             token=token
         )
         response = messaging.send(message)
@@ -70,20 +83,22 @@ def send_push_notification(token, title, body, data=None):
 
 # =============================================================
 # SEND NOTIFICATION TO MULTIPLE DEVICES
-# Sends a push notification to multiple device tokens at once
-# Used for announcements, meeting notices etc
+# Same data-only approach as above, for bulk sends.
 # =============================================================
 def send_bulk_notification(tokens, title, body, data=None):
     initialize_firebase()
     if not tokens:
         return {'success': False, 'error': 'No tokens provided'}
     try:
+        payload_data = {
+            'title': title,
+            'body': body,
+        }
+        if data:
+            payload_data.update({k: str(v) for k, v in data.items()})
+
         message = messaging.MulticastMessage(
-            notification=messaging.Notification(
-                title=title,
-                body=body
-            ),
-            data=data or {},
+            data=payload_data,
             tokens=tokens
         )
         response = messaging.send_each_for_multicast(message)
