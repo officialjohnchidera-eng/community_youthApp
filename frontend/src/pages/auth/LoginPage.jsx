@@ -51,9 +51,9 @@ export default function LoginPage() {
               alt="Logo"
               className="w-20 h-20 rounded-full object-cover border-4 border-emerald-500 mx-auto mb-6 shadow-xl"
             />
-            <h1 className="text-4xl font-bold text-white mb-4">Community Youth</h1>
+            <h1 className="text-4xl font-bold text-white mb-4">Umuagu Youth</h1>
             <p className="text-emerald-400 text-lg font-medium mb-6">
-              General Youth Organization
+              General Youth Association
             </p>
             <p className="text-gray-300 text-base leading-relaxed max-w-md">
               One platform for all 4 village units. Manage payments, meetings,
