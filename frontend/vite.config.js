@@ -18,7 +18,7 @@ export default defineConfig({
       },
       manifest: {
         name: "Umuagu Youth App",
-        short_name: "UmuaguYouth",
+        short_name: "Umuagu Youth",
         description: "Community youth platform for Umuagu",
         theme_color: "#0f172a",
         background_color: "#0f172a",

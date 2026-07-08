@@ -104,7 +104,7 @@ export default function LandingPage() {
             </div>
             <div>
               <h1 className="text-white font-bold text-base leading-none">
-                Community Youth
+                Umuagu Youth
               </h1>
               <p className="text-emerald-400 text-xs font-medium tracking-wider uppercase">
                 General Association
