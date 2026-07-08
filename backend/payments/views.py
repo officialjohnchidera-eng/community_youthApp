@@ -1040,3 +1040,288 @@ def verify_receipt(request, receipt_number):
         'paid_at': transaction.paid_at,
         'paystack_reference': transaction.paystack_reference,
     })
+
+
+
+
+cat << 'EOF'
+
+
+def is_clearance_authorized(user):
+    allowed_positions = [
+        'General President',
+        'Vice President',
+        'General Secretary',
+        'Public Relation Officer',
+        'Financial Secretary',
+    ]
+    return user.position and user.position.title in allowed_positions
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_member_clearance(request, identifier):
+    """
+    Looks up a member by user_id (e.g. UMY0042) or email, and returns
+    their central-body financial standing: every event/fine payment
+    request that applied to them, whether they paid or missed it, plus
+    the manual primary-unit clearance record if one exists.
+
+    Deliberately excludes dues/levy — those are village-level lump-sum
+    obligations and never reflect on an individual member's standing.
+    """
+    if not is_clearance_authorized(request.user):
+        return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    from accounts.models import CustomUser, PrimaryUnitClearance
+
+    try:
+        if '@' in identifier:
+            member = CustomUser.objects.get(email__iexact=identifier)
+        else:
+            member = CustomUser.objects.get(user_id__iexact=identifier)
+    except CustomUser.DoesNotExist:
+        return Response({'error': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Every event/fine request that has ever gone out (active or closed) —
+    # these are the only types that reflect on an individual, not dues/levy
+    central_requests = PaymentRequest.objects.filter(
+        payment_type__in=['event', 'fine']
+    ).order_by('-created_at')
+
+    paid_request_ids = set(
+        PaymentTransaction.objects.filter(
+            member=member,
+            status='success',
+            payment_request__payment_type__in=['event', 'fine']
+        ).values_list('payment_request_id', flat=True)
+    )
+
+    history = []
+    total_owing = 0
+    outstanding_count = 0
+
+    for req in central_requests:
+        is_paid = req.id in paid_request_ids
+        if not is_paid:
+            total_owing += float(req.amount)
+            outstanding_count += 1
+        history.append({
+            'id': req.id,
+            'title': req.title,
+            'payment_type': req.payment_type,
+            'amount': str(req.amount),
+            'deadline': req.deadline,
+            'status': 'paid' if is_paid else 'missed',
+        })
+
+    try:
+        unit_clearance = member.primary_unit_clearance
+        unit_clearance_data = {
+            'is_cleared': unit_clearance.is_cleared,
+            'note': unit_clearance.note,
+            'confirmed_by': str(unit_clearance.confirmed_by) if unit_clearance.confirmed_by else None,
+            'updated_at': unit_clearance.updated_at,
+        }
+    except PrimaryUnitClearance.DoesNotExist:
+        unit_clearance_data = None
+
+    return Response({
+        'member': {
+            'user_id': member.user_id,
+            'name': f'{member.first_name} {member.last_name}',
+            'email': member.email,
+            'village': member.village.name if member.village else 'N/A',
+            'position': member.position.title if member.position else 'Floor Member',
+            'account_status': member.account_status,
+        },
+        'central_standing': {
+            'is_cleared': outstanding_count == 0,
+            'outstanding_count': outstanding_count,
+            'total_owing': total_owing,
+        },
+        'history': history,
+        'primary_unit_clearance': unit_clearance_data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def set_primary_unit_clearance(request, identifier):
+    """
+    Lets an authorized exec record the manual, human-verified check
+    that a member is clear with their primary village unit — a
+    verbal or evidence-based confirmation that happens outside the app.
+    """
+    if not is_clearance_authorized(request.user):
+        return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    from accounts.models import CustomUser, PrimaryUnitClearance
+
+    try:
+        if '@' in identifier:
+            member = CustomUser.objects.get(email__iexact=identifier)
+        else:
+            member = CustomUser.objects.get(user_id__iexact=identifier)
+    except CustomUser.DoesNotExist:
+        return Response({'error': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    is_cleared = request.data.get('is_cleared', False)
+    note = request.data.get('note', '')
+
+    clearance, _ = PrimaryUnitClearance.objects.update_or_create(
+        member=member,
+        defaults={
+            'is_cleared': is_cleared,
+            'note': note,
+            'confirmed_by': request.user,
+        }
+    )
+
+    return Response({
+        'message': 'Primary unit clearance updated.',
+        'is_cleared': clearance.is_cleared,
+        'note': clearance.note,
+        'confirmed_by': str(clearance.confirmed_by),
+        'updated_at': clearance.updated_at,
+    })
+
+
+def is_clearance_authorized(user):
+    allowed_positions = [
+        'General President',
+        'Vice President',
+        'General Secretary',
+        'Public Relation Officer',
+        'Financial Secretary',
+    ]
+    return user.position and user.position.title in allowed_positions
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_member_clearance(request, identifier):
+    """
+    Looks up a member by user_id (e.g. UMY0042) or email, and returns
+    their central-body financial standing: every event/fine payment
+    request that applied to them, whether they paid or missed it, plus
+    the manual primary-unit clearance record if one exists.
+
+    Deliberately excludes dues/levy — those are village-level lump-sum
+    obligations and never reflect on an individual member's standing.
+    """
+    if not is_clearance_authorized(request.user):
+        return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    from accounts.models import CustomUser, PrimaryUnitClearance
+
+    try:
+        if '@' in identifier:
+            member = CustomUser.objects.get(email__iexact=identifier)
+        else:
+            member = CustomUser.objects.get(user_id__iexact=identifier)
+    except CustomUser.DoesNotExist:
+        return Response({'error': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Every event/fine request that has ever gone out (active or closed) —
+    # these are the only types that reflect on an individual, not dues/levy
+    central_requests = PaymentRequest.objects.filter(
+        payment_type__in=['event', 'fine']
+    ).order_by('-created_at')
+
+    paid_request_ids = set(
+        PaymentTransaction.objects.filter(
+            member=member,
+            status='success',
+            payment_request__payment_type__in=['event', 'fine']
+        ).values_list('payment_request_id', flat=True)
+    )
+
+    history = []
+    total_owing = 0
+    outstanding_count = 0
+
+    for req in central_requests:
+        is_paid = req.id in paid_request_ids
+        if not is_paid:
+            total_owing += float(req.amount)
+            outstanding_count += 1
+        history.append({
+            'id': req.id,
+            'title': req.title,
+            'payment_type': req.payment_type,
+            'amount': str(req.amount),
+            'deadline': req.deadline,
+            'status': 'paid' if is_paid else 'missed',
+        })
+
+    try:
+        unit_clearance = member.primary_unit_clearance
+        unit_clearance_data = {
+            'is_cleared': unit_clearance.is_cleared,
+            'note': unit_clearance.note,
+            'confirmed_by': str(unit_clearance.confirmed_by) if unit_clearance.confirmed_by else None,
+            'updated_at': unit_clearance.updated_at,
+        }
+    except PrimaryUnitClearance.DoesNotExist:
+        unit_clearance_data = None
+
+    return Response({
+        'member': {
+            'user_id': member.user_id,
+            'name': f'{member.first_name} {member.last_name}',
+            'email': member.email,
+            'village': member.village.name if member.village else 'N/A',
+            'position': member.position.title if member.position else 'Floor Member',
+            'account_status': member.account_status,
+        },
+        'central_standing': {
+            'is_cleared': outstanding_count == 0,
+            'outstanding_count': outstanding_count,
+            'total_owing': total_owing,
+        },
+        'history': history,
+        'primary_unit_clearance': unit_clearance_data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def set_primary_unit_clearance(request, identifier):
+    """
+    Lets an authorized exec record the manual, human-verified check
+    that a member is clear with their primary village unit — a
+    verbal or evidence-based confirmation that happens outside the app.
+    """
+    if not is_clearance_authorized(request.user):
+        return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    from accounts.models import CustomUser, PrimaryUnitClearance
+
+    try:
+        if '@' in identifier:
+            member = CustomUser.objects.get(email__iexact=identifier)
+        else:
+            member = CustomUser.objects.get(user_id__iexact=identifier)
+    except CustomUser.DoesNotExist:
+        return Response({'error': 'Member not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    is_cleared = request.data.get('is_cleared', False)
+    note = request.data.get('note', '')
+
+    clearance, _ = PrimaryUnitClearance.objects.update_or_create(
+        member=member,
+        defaults={
+            'is_cleared': is_cleared,
+            'note': note,
+            'confirmed_by': request.user,
+        }
+    )
+
+    return Response({
+        'message': 'Primary unit clearance updated.',
+        'is_cleared': clearance.is_cleared,
+        'note': clearance.note,
+        'confirmed_by': str(clearance.confirmed_by),
+        'updated_at': clearance.updated_at,
+    })

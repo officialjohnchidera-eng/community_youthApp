@@ -1,8 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
-import ReceiptVerificationPage from './pages/dashboard/ReceiptVerificationPage'
-import ProfilePage from './pages/dashboard/ProfilePage'
 
+import ProfilePage from './pages/dashboard/ProfilePage'
 
 // Public Pages
 import LandingPage from './pages/LandingPage'
@@ -26,6 +25,7 @@ import DisciplinaryPage from './pages/dashboard/DisciplinaryPage'
 import ReportsPage from './pages/dashboard/ReportsPage'
 import NotificationsPage from './pages/dashboard/NotificationsPage'
 import ApprovalsPage from './pages/dashboard/ApprovalsPage'
+import ClearancePage from './pages/dashboard/ClearancePage'
 
 const LoadingScreen = () => (
   <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -81,6 +81,23 @@ const PresidentRoute = ({ children }) => {
   return children
 }
 
+// Must hold one of the positions authorized to view member clearance
+// standing: President, VP, General Secretary, PRO, Financial Secretary.
+// Deliberately narrower than ExecRoute, since this surfaces another
+// member's personal financial history.
+const ClearanceRoute = ({ children }) => {
+  const { user, loading } = useAuth()
+  const clearancePositions = [
+    'General President', 'Vice President',
+    'General Secretary', 'Public Relation Officer',
+    'Financial Secretary'
+  ]
+  if (loading) return <LoadingScreen />
+  if (!user) return <Navigate to="/login" />
+  if (!user.position || !clearancePositions.includes(user.position)) return <Navigate to="/dashboard" />
+  return children
+}
+
 // Logged out only
 const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth()
@@ -111,11 +128,11 @@ export default function App() {
       <Route path="/dashboard/members" element={<ApprovedRoute><MembersPage /></ApprovedRoute>} />
       <Route path="/dashboard/documents" element={<ApprovedRoute><DocumentsPage /></ApprovedRoute>} />
       <Route path="/dashboard/disciplinary" element={<ExecRoute><DisciplinaryPage /></ExecRoute>} />
-      <Route path="/dashboard/verify-receipt" element={<ApprovedRoute><ReceiptVerificationPage /></ApprovedRoute>} />
       <Route path="/dashboard/reports" element={<ExecRoute><ReportsPage /></ExecRoute>} />
       <Route path="/dashboard/notifications" element={<ApprovedRoute><NotificationsPage /></ApprovedRoute>} />
       <Route path="/dashboard/approvals" element={<PresidentRoute><ApprovalsPage /></PresidentRoute>} />
       <Route path="/dashboard/payments/:id/audit" element={<ApprovedRoute><PaymentAuditPage /></ApprovedRoute>} />
+      <Route path="/dashboard/clearance" element={<ClearanceRoute><ClearancePage /></ClearanceRoute>} />
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" />} />

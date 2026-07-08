@@ -209,3 +209,54 @@ class AccountVerificationLog(models.Model):
 
     def __str__(self):
         return f'{self.member} - {self.decision} by {self.reviewed_by} on {self.reviewed_at}'
+
+
+
+# =============================================================
+# PRIMARY UNIT CLEARANCE MODEL
+# Records the manual, human-verified confirmation that a member
+# is in good standing with their PRIMARY village unit (dues,
+# local discipline, etc.) — matters the app deliberately does NOT
+# track, since each unit handles its own affairs independently.
+# This is filled in by an authorized central executive after a
+# verbal or evidence-based check with the member's unit, and is
+# shown alongside the app's own central-level (event/fine) standing
+# on the Clearance page.
+# =============================================================
+class PrimaryUnitClearance(models.Model):
+    member = models.OneToOneField(
+        'CustomUser',
+        on_delete=models.CASCADE,
+        related_name='primary_unit_clearance'
+    )
+    is_cleared = models.BooleanField(default=False)
+    note = models.TextField(blank=True)
+    confirmed_by = models.ForeignKey(
+        'CustomUser',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='clearance_confirmations_made'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.member} - {"Cleared" if self.is_cleared else "Not Cleared"} (unit)'
+
+class PrimaryUnitClearance(models.Model):
+    member = models.OneToOneField(
+        'CustomUser',
+        on_delete=models.CASCADE,
+        related_name='primary_unit_clearance'
+    )
+    is_cleared = models.BooleanField(default=False)
+    note = models.TextField(blank=True)
+    confirmed_by = models.ForeignKey(
+        'CustomUser',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='clearance_confirmations_made'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.member} - {"Cleared" if self.is_cleared else "Not Cleared"} (unit)'

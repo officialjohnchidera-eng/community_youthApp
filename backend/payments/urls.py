@@ -22,4 +22,8 @@ urlpatterns = [
     path('requests/<int:payment_id>/audit/', views.get_payment_request_audit, name='payment_audit'),
     path('receipt/<str:reference>/', views.download_receipt, name='download_receipt'),
     path('verify-receipt/<str:receipt_number>/', views.verify_receipt, name='verify_receipt'),
+
+    # Clearance
+    path('clearance/<str:identifier>/', views.get_member_clearance, name='get_member_clearance'),
+    path('clearance/<str:identifier>/set/', views.set_primary_unit_clearance, name='set_primary_unit_clearance'),
 ]

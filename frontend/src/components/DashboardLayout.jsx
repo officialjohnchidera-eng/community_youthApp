@@ -11,7 +11,7 @@ import {
   FaUsers, FaPhotoVideo, FaHeart, FaGavel, FaPoll,
   FaFileAlt, FaBell, FaSignOutAlt, FaBars, FaTimes,
   FaUserCheck, FaChartBar, FaCalendar, FaMoneyBill, FaUser,
-  FaReceipt // <-- Added this import
+  FaReceipt, FaShieldAlt, // <-- Added this import
 } from 'react-icons/fa'
 
 const getNavItems = (user) => {
@@ -38,6 +38,7 @@ const getNavItems = (user) => {
     { path: '/dashboard/disciplinary', icon: <FaGavel />, label: 'Disciplinary' },
     { path: '/dashboard/reports', icon: <FaChartBar />, label: 'Reports' },
     { path: '/dashboard/notifications', icon: <FaBell />, label: 'Notifications' },
+    { path: '/dashboard/clearance', icon: <FaShieldAlt />, label: 'Clearance' },
   ]
 
   const adminItems = [
