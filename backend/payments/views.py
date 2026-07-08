@@ -1041,12 +1041,6 @@ def verify_receipt(request, receipt_number):
         'paystack_reference': transaction.paystack_reference,
     })
 
-
-
-
-cat << 'EOF'
-
-
 def is_clearance_authorized(user):
     allowed_positions = [
         'General President',
