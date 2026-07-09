@@ -20,3 +20,6 @@ Thumbs.db
 .vscode/
 .idea/
 sync_position_occupancy.py
+backup_*.json
+*.backup.json
+db_backup_*.json
